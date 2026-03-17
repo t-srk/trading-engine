@@ -5,26 +5,16 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
-# ── Compiler warnings (works for both MSVC and GCC/Clang) ────────────────────
 if(MSVC)
-    add_compile_options(
-        /W4
-        /WX-
-        /permissive-
-        /wd4100
-    )
+    add_compile_options(/W4 /WX- /permissive- /wd4100)
 else()
-    add_compile_options(
-        -Wall
-        -Wextra
-        -Wpedantic
-        -Wshadow
-    )
+    add_compile_options(-Wall -Wextra -Wpedantic -Wshadow)
 endif()
 
 # ── Main executable ───────────────────────────────────────────────────────────
 add_executable(trading_engine
     src/main.cpp
+    src/order_book.cpp       # ← added
 )
 
 target_include_directories(trading_engine PRIVATE include)
@@ -32,6 +22,7 @@ target_include_directories(trading_engine PRIVATE include)
 # ── Tests executable ──────────────────────────────────────────────────────────
 add_executable(tests
     tests/test_order_book.cpp
+    src/order_book.cpp       # ← added
 )
 
 target_include_directories(tests PRIVATE include)

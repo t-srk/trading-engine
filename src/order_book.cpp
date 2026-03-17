@@ -1,0 +1,119 @@
+#include "order_book.h"
+
+namespace trading {
+
+// ── Public: add_order ─────────────────────────────────────────────────────────
+std::vector<Trade> OrderBook::add_order(Order order) {
+    std::vector<Trade> trades = match_order(order);
+
+    if (order.remaining_qty() > 0 && !order.is_complete()) {
+        rest_order(order);
+    }
+
+    return trades;
+}
+
+// ── Private: match_against ────────────────────────────────────────────────────
+// Template so it works for both map types (std::less and std::greater)
+// This is the core insight: the matching algorithm is identical regardless
+// of which side of the book we're walking — only the type differs.
+template<typename MapType>
+std::vector<Trade> OrderBook::match_against(Order& incoming, MapType& opposite_side) {
+    std::vector<Trade> trades;
+
+    while (incoming.remaining_qty() > 0 && !opposite_side.empty()) {
+        auto it = opposite_side.begin();
+        PriceLevel& level = it->second;
+
+        // Price check: does this order cross the spread?
+        bool price_matches = (incoming.side == Side::BUY)
+            ? (incoming.price >= level.price())
+            : (incoming.price <= level.price());
+
+        if (!price_matches) break;
+
+        // Match against orders at this level one at a time (time priority)
+        while (incoming.remaining_qty() > 0 && !level.empty()) {
+            Order& resting = level.front();
+
+            uint32_t fill_qty = std::min(
+                incoming.remaining_qty(),
+                resting.remaining_qty()
+            );
+
+            // ── Record the trade ──────────────────────────────────────────────
+            Trade trade;
+            trade.trade_id  = next_trade_id_++;
+            trade.timestamp = incoming.timestamp;
+            trade.instrument = incoming.instrument;
+            trade.price     = resting.price;   // resting order sets the price
+            trade.quantity  = fill_qty;
+
+            if (incoming.side == Side::BUY) {
+                trade.buy_order_id  = incoming.order_id;
+                trade.sell_order_id = resting.order_id;
+                trade.buyer_id      = incoming.user_id;
+                trade.seller_id     = resting.user_id;
+            } else {
+                trade.buy_order_id  = resting.order_id;
+                trade.sell_order_id = incoming.order_id;
+                trade.buyer_id      = resting.user_id;
+                trade.seller_id     = incoming.user_id;
+            }
+
+            trades.push_back(trade);
+
+            // ── Update quantities ─────────────────────────────────────────────
+            incoming.filled_qty += fill_qty;
+            resting.filled_qty  += fill_qty;
+            level.reduce_quantity(fill_qty);
+
+            incoming.status = (incoming.remaining_qty() == 0)
+                ? OrderStatus::FILLED : OrderStatus::PARTIALLY_FILLED;
+            resting.status = (resting.remaining_qty() == 0)
+                ? OrderStatus::FILLED : OrderStatus::PARTIALLY_FILLED;
+
+            if (resting.is_complete()) {
+                level.pop_front();
+            }
+        }
+
+        // Remove the price level if it's been fully drained
+        if (level.empty()) {
+            opposite_side.erase(it);
+        }
+    }
+
+    return trades;
+}
+
+// ── Private: match_order ──────────────────────────────────────────────────────
+// Dispatches to the correct side based on incoming order direction
+std::vector<Trade> OrderBook::match_order(Order& incoming) {
+    if (incoming.side == Side::BUY) {
+        return match_against(incoming, asks_);
+    } else {
+        return match_against(incoming, bids_);
+    }
+}
+
+// ── Private: rest_order ───────────────────────────────────────────────────────
+void OrderBook::rest_order(Order& order) {
+    order.status = (order.filled_qty > 0)
+        ? OrderStatus::PARTIALLY_FILLED
+        : OrderStatus::OPEN;
+
+    if (order.side == Side::BUY) {
+        if (bids_.find(order.price) == bids_.end()) {
+            bids_.emplace(order.price, PriceLevel(order.price));
+        }
+        bids_.at(order.price).add_order(order);
+    } else {
+        if (asks_.find(order.price) == asks_.end()) {
+            asks_.emplace(order.price, PriceLevel(order.price));
+        }
+        asks_.at(order.price).add_order(order);
+    }
+}
+
+} // namespace trading
