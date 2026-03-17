@@ -1,0 +1,16 @@
+# Build output — never commit this
+build/
+
+# VSCode local user settings (your machine-specific stuff)
+.vscode/settings.json
+
+# macOS
+.DS_Store
+
+# Compiled object files
+*.o
+*.obj
+
+# Binaries
+*.out
+*.exe

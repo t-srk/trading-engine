@@ -1,0 +1,17 @@
+{
+  "version": "0.2.0",
+  "configurations": [
+    {
+      "name": "Debug trading_engine",
+      "type": "cppdbg",
+      "request": "launch",
+      "program": "${workspaceFolder}/build/trading_engine",
+      "args": [],
+      "stopAtEntry": false,
+      "cwd": "${workspaceFolder}",
+      "externalConsole": false,
+      "MIMode": "gdb",
+      "preLaunchTask": "CMake Build"
+    }
+  ]
+}

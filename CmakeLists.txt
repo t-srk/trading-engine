@@ -1,0 +1,37 @@
+cmake_minimum_required(VERSION 3.20)
+project(TradingEngine VERSION 0.1.0 LANGUAGES CXX)
+
+set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD_REQUIRED ON)
+set(CMAKE_CXX_EXTENSIONS OFF)
+
+# ── Compiler warnings (works for both MSVC and GCC/Clang) ────────────────────
+if(MSVC)
+    add_compile_options(
+        /W4
+        /WX-
+        /permissive-
+        /wd4100
+    )
+else()
+    add_compile_options(
+        -Wall
+        -Wextra
+        -Wpedantic
+        -Wshadow
+    )
+endif()
+
+# ── Main executable ───────────────────────────────────────────────────────────
+add_executable(trading_engine
+    src/main.cpp
+)
+
+target_include_directories(trading_engine PRIVATE include)
+
+# ── Tests executable ──────────────────────────────────────────────────────────
+add_executable(tests
+    tests/test_order_book.cpp
+)
+
+target_include_directories(tests PRIVATE include)
