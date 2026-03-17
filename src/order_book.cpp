@@ -115,5 +115,58 @@ void OrderBook::rest_order(Order& order) {
         asks_.at(order.price).add_order(order);
     }
 }
+// ── Public: cancel_order ──────────────────────────────────────────────────────
+bool OrderBook::cancel_order(uint64_t order_id, Side side, double price) {
+    // Select the right side of the book
+    auto cancel_from = [&](auto& book_side) -> bool {
+        auto it = book_side.find(price);
+        if (it == book_side.end()) return false;
+
+        PriceLevel& level = it->second;
+
+        // std::queue has no erase — we rebuild it without the target order
+        // This is O(n) at the price level. Acceptable for now.
+        // Production systems use a doubly-linked list for O(1) removal.
+        std::queue<Order> rebuilt;
+        bool found = false;
+
+        // Drain the existing queue, skip the cancelled order
+        while (!level.empty()) {
+            Order& front = level.front();
+            if (front.order_id == order_id) {
+                found = true;
+                level.pop_front();      // discard it
+            } else {
+                rebuilt.push(front);
+                level.pop_front();
+            }
+        }
+
+        // Rebuild the level with remaining orders
+        // We need to re-add them properly — easier to reconstruct the level
+        if (found) {
+            // Remove old level and rebuild
+            double lvl_price = level.price();
+            book_side.erase(it);
+
+            if (!rebuilt.empty()) {
+                book_side.emplace(lvl_price, PriceLevel(lvl_price));
+                PriceLevel& new_level = book_side.at(lvl_price);
+                while (!rebuilt.empty()) {
+                    new_level.add_order(rebuilt.front());
+                    rebuilt.pop();
+                }
+            }
+        }
+
+        return found;
+    };
+
+    if (side == Side::BUY) {
+        return cancel_from(bids_);
+    } else {
+        return cancel_from(asks_);
+    }
+}
 
 } // namespace trading

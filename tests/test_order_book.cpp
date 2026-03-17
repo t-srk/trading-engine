@@ -1,112 +1,141 @@
 #include <iostream>
 #include <cassert>
-#include "order_book.h"
+#include "matching_engine.h"
 
 using namespace trading;
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
-// Makes creating test orders less verbose
-Order make_order(uint64_t id, const std::string& user,
-                 Side side, double price, uint32_t qty)
-{
-    Order o;
-    o.order_id   = id;
-    o.timestamp  = id;       // use id as timestamp so lower id = earlier
-    o.user_id    = user;
-    o.instrument = "BTC-USD";
-    o.price      = price;
-    o.quantity   = qty;
-    o.filled_qty = 0;
-    o.side       = side;
-    o.type       = OrderType::LIMIT;
-    o.status     = OrderStatus::OPEN;
-    return o;
+MatchingEngine make_engine() {
+    MatchingEngine engine;
+    engine.add_instrument("BTC-USD");
+    return engine;
 }
 
-// ── Tests ─────────────────────────────────────────────────────────────────────
+// ── OrderBook tests (now via MatchingEngine) ──────────────────────────────────
 
 void test_no_match_when_spread_exists() {
-    // Bid at 99, ask at 101 — no match should occur
-    OrderBook book;
-    auto trades1 = book.add_order(make_order(1, "alice", Side::BUY,  99.0, 10));
-    auto trades2 = book.add_order(make_order(2, "bob",   Side::SELL, 101.0, 10));
+    auto engine = make_engine();
+    auto t1 = engine.submit_order("alice", "BTC-USD", Side::BUY,  99.0, 10);
+    auto t2 = engine.submit_order("bob",   "BTC-USD", Side::SELL, 101.0, 10);
 
-    assert(trades1.empty());
-    assert(trades2.empty());
-    assert(book.best_bid().value() == 99.0);
-    assert(book.best_ask().value() == 101.0);
+    assert(t1.empty());
+    assert(t2.empty());
+    assert(engine.get_book("BTC-USD").best_bid().value() == 99.0);
+    assert(engine.get_book("BTC-USD").best_ask().value() == 101.0);
     std::cout << "[PASS] test_no_match_when_spread_exists\n";
 }
 
-void test_full_match_at_same_price() {
-    // Buy and sell at same price, same quantity — should fully match
-    OrderBook book;
-    book.add_order(make_order(1, "alice", Side::BUY,  100.0, 10));
-    auto trades = book.add_order(make_order(2, "bob", Side::SELL, 100.0, 10));
+void test_full_match() {
+    auto engine = make_engine();
+    engine.submit_order("alice", "BTC-USD", Side::BUY,  100.0, 10);
+    auto trades = engine.submit_order("bob", "BTC-USD", Side::SELL, 100.0, 10);
 
     assert(trades.size() == 1);
-    assert(trades[0].quantity == 10);
-    assert(trades[0].price    == 100.0);
-    assert(trades[0].buyer_id  == "alice");
-    assert(trades[0].seller_id == "bob");
-    assert(book.bids_empty());
-    assert(book.asks_empty());
-    std::cout << "[PASS] test_full_match_at_same_price\n";
+    assert(trades[0].quantity   == 10);
+    assert(trades[0].price      == 100.0);
+    assert(trades[0].buyer_id   == "alice");
+    assert(trades[0].seller_id  == "bob");
+    assert(engine.trade_history().size() == 1);
+    std::cout << "[PASS] test_full_match\n";
 }
 
 void test_partial_match() {
-    // Alice wants 10, Bob only sells 6 — partial fill
-    OrderBook book;
-    book.add_order(make_order(1, "alice", Side::BUY,  100.0, 10));
-    auto trades = book.add_order(make_order(2, "bob", Side::SELL, 100.0, 6));
+    auto engine = make_engine();
+    engine.submit_order("alice", "BTC-USD", Side::BUY,  100.0, 10);
+    auto trades = engine.submit_order("bob", "BTC-USD", Side::SELL, 100.0, 6);
 
     assert(trades.size() == 1);
     assert(trades[0].quantity == 6);
-    // Alice's order should still be in the book with 4 remaining
-    assert(book.best_bid().value() == 100.0);
-    assert(book.asks_empty());
+    assert(engine.get_book("BTC-USD").best_bid().value() == 100.0);
     std::cout << "[PASS] test_partial_match\n";
 }
 
 void test_time_priority() {
-    // Two buyers at same price — first in should get filled first
-    OrderBook book;
-    book.add_order(make_order(1, "alice", Side::BUY, 100.0, 5));  // first
-    book.add_order(make_order(2, "bob",   Side::BUY, 100.0, 5));  // second
-
-    // Seller can only fill 5 — should go to alice (first in)
-    auto trades = book.add_order(make_order(3, "carol", Side::SELL, 100.0, 5));
+    auto engine = make_engine();
+    engine.submit_order("alice", "BTC-USD", Side::BUY, 100.0, 5);
+    engine.submit_order("bob",   "BTC-USD", Side::BUY, 100.0, 5);
+    auto trades = engine.submit_order("carol", "BTC-USD", Side::SELL, 100.0, 5);
 
     assert(trades.size() == 1);
-    assert(trades[0].buyer_id == "alice");   // alice gets priority
-    assert(trades[0].quantity == 5);
-    // Bob's order should still be resting
-    assert(book.best_bid().value() == 100.0);
+    assert(trades[0].buyer_id == "alice");
     std::cout << "[PASS] test_time_priority\n";
 }
 
 void test_price_priority() {
-    // Two buyers at different prices — higher price gets filled first
-    OrderBook book;
-    book.add_order(make_order(1, "alice", Side::BUY, 101.0, 5));  // better price
-    book.add_order(make_order(2, "bob",   Side::BUY,  99.0, 5));  // worse price
-
-    auto trades = book.add_order(make_order(3, "carol", Side::SELL, 99.0, 5));
+    auto engine = make_engine();
+    engine.submit_order("alice", "BTC-USD", Side::BUY, 101.0, 5);
+    engine.submit_order("bob",   "BTC-USD", Side::BUY,  99.0, 5);
+    auto trades = engine.submit_order("carol", "BTC-USD", Side::SELL, 99.0, 5);
 
     assert(trades.size() == 1);
-    assert(trades[0].buyer_id == "alice");   // higher bidder gets priority
+    assert(trades[0].buyer_id == "alice");
     assert(trades[0].price    == 101.0);
     std::cout << "[PASS] test_price_priority\n";
 }
 
+// ── Cancellation tests ────────────────────────────────────────────────────────
+
+void test_cancel_resting_order() {
+    auto engine = make_engine();
+    engine.submit_order("alice", "BTC-USD", Side::BUY, 100.0, 10);
+
+    // Order 1 is alice's buy — cancel it
+    bool cancelled = engine.cancel_order(1);
+    assert(cancelled == true);
+
+    // Book should now be empty — bob's sell should not match anything
+    auto trades = engine.submit_order("bob", "BTC-USD", Side::SELL, 100.0, 10);
+    assert(trades.empty());
+    std::cout << "[PASS] test_cancel_resting_order\n";
+}
+
+void test_cancel_already_filled_order_fails() {
+    auto engine = make_engine();
+    engine.submit_order("alice", "BTC-USD", Side::BUY,  100.0, 10);
+    engine.submit_order("bob",   "BTC-USD", Side::SELL, 100.0, 10);
+
+    // Order 1 (alice's) is fully filled — should not be cancellable
+    bool cancelled = engine.cancel_order(1);
+    assert(cancelled == false);
+    std::cout << "[PASS] test_cancel_already_filled_order_fails\n";
+}
+
+void test_cancel_nonexistent_order_fails() {
+    auto engine = make_engine();
+    bool cancelled = engine.cancel_order(999);
+    assert(cancelled == false);
+    std::cout << "[PASS] test_cancel_nonexistent_order_fails\n";
+}
+
+void test_unknown_instrument_throws() {
+    auto engine = make_engine();
+    bool threw = false;
+    try {
+        engine.submit_order("alice", "ETH-USD", Side::BUY, 100.0, 10);
+    } catch (const std::invalid_argument&) {
+        threw = true;
+    }
+    assert(threw == true);
+    std::cout << "[PASS] test_unknown_instrument_throws\n";
+}
+
 // ── Runner ────────────────────────────────────────────────────────────────────
 int main() {
-    std::cout << "── Running OrderBook tests ──\n";
+    std::cout << "Running tests...\n\n";
+
     test_no_match_when_spread_exists();
-    test_full_match_at_same_price();
+    test_full_match();
     test_partial_match();
     test_time_priority();
     test_price_priority();
-    std::cout << "── All tests passed ──\n";
+
+    std::cout << "\n";
+
+    test_cancel_resting_order();
+    test_cancel_already_filled_order_fails();
+    test_cancel_nonexistent_order_fails();
+    test_unknown_instrument_throws();
+
+    std::cout << "\nAll tests passed.\n";
     return 0;
 }

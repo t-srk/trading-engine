@@ -46,6 +46,9 @@ public:
 
     bool bids_empty() const { return bids_.empty(); }
     bool asks_empty() const { return asks_.empty(); }
+    // Cancel a resting order by ID
+    // Returns true if found and removed
+    bool cancel_order(uint64_t order_id, Side side, double price);
 
 private:
     std::map<double, PriceLevel, std::greater<double>> bids_;

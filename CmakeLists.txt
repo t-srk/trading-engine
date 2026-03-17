@@ -11,10 +11,17 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic -Wshadow)
 endif()
 
+# ── Shared sources ────────────────────────────────────────────────────────────
+# Both targets need these — define once to avoid repetition
+set(ENGINE_SOURCES
+    src/order_book.cpp
+    src/matching_engine.cpp
+)
+
 # ── Main executable ───────────────────────────────────────────────────────────
 add_executable(trading_engine
     src/main.cpp
-    src/order_book.cpp       # ← added
+    ${ENGINE_SOURCES}
 )
 
 target_include_directories(trading_engine PRIVATE include)
@@ -22,7 +29,7 @@ target_include_directories(trading_engine PRIVATE include)
 # ── Tests executable ──────────────────────────────────────────────────────────
 add_executable(tests
     tests/test_order_book.cpp
-    src/order_book.cpp       # ← added
+    ${ENGINE_SOURCES}
 )
 
 target_include_directories(tests PRIVATE include)
