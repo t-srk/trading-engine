@@ -162,7 +162,7 @@ void Session::handle_submit(const std::string& msg) {
         {
             std::lock_guard<std::mutex> lock(server_.mutex());
             if (server_.is_halted()) {
-                deliver(json{{"event","error"},{"reason","engine halted — trading suspended"}}.dump() + "\n");
+                deliver(json{{"event","error"},{"reason","exchange is closed, take a break"}}.dump() + "\n");
                 return;
             }
             trades   = engine_.submit_order(user_id, instrument, side, price, quantity);
