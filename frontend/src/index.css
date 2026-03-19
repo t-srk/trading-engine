@@ -7,17 +7,17 @@
   --text:         #111827;
   --dim:          #9ca3af;
 
-  --bid-bg:       #fecaca;   /* red-200  — noticeably red */
-  --bid-bg-hover: #fca5a5;   /* red-300  — darker on hover */
-  --bid-text:     #991b1b;   /* red-800  */
-  --bid-my-bg:    #f87171;   /* red-400  — own order highlight */
+  --bid-bg:       #fca5a5;   /* red-300  — strong red */
+  --bid-bg-hover: #f87171;   /* red-400  — darker on hover */
+  --bid-text:     #000000;   /* black    — clear numbers */
+  --bid-my-bg:    #dc2626;   /* red-600  — own order highlight */
   --bid-my-text:  #fff;
   --bid-own-bg:   #fff6f6;   /* near-white with barely-there red tint */
 
-  --ask-bg:       #bbf7d0;   /* green-200 — noticeably green */
-  --ask-bg-hover: #86efac;   /* green-300 — darker on hover */
-  --ask-text:     #166534;   /* green-800 */
-  --ask-my-bg:    #4ade80;   /* green-400 — own order highlight */
+  --ask-bg:       #6ee7b7;   /* emerald-300 — strong green */
+  --ask-bg-hover: #34d399;   /* emerald-400 — darker on hover */
+  --ask-text:     #000000;   /* black    — clear numbers */
+  --ask-my-bg:    #059669;   /* emerald-600 — own order highlight */
   --ask-my-text:  #fff;
   --ask-own-bg:   #f5fff8;   /* near-white with barely-there green tint */
 
@@ -330,14 +330,12 @@ html, body, #root {
 /* Row separator */
 .ob-table tbody tr { border-bottom: 1px solid var(--border); }
 
-/* Mid-market row highlight */
+/* Mid-market row highlight — price column only */
 .ob-mid-row .price-cell {
   background: #fef9c3;
   color: #713f12;
   font-weight: 700;
 }
-.ob-mid-row .bid-cell  { background: #fef3c7; }
-.ob-mid-row .ask-cell  { background: #fef3c7; }
 
 /* Own-level indicator */
 .own-level {
