@@ -4,13 +4,12 @@ namespace trading {
 
 // ── Public: add_order ─────────────────────────────────────────────────────────
 std::vector<Trade> OrderBook::add_order(Order order) {
-    std::vector<Trade> trades = match_order(order);
+   std::vector<Trade> trades = match_order(order);
 
-    if (order.remaining_qty() > 0 && !order.is_complete()) {
-        rest_order(order);
-    }
-
-    return trades;
+   if (order.remaining_qty() > 0 && !order.is_complete()) {
+      rest_order(order);
+   }
+   return trades;
 }
 
 // ── Private: match_against ────────────────────────────────────────────────────
@@ -19,82 +18,90 @@ std::vector<Trade> OrderBook::add_order(Order order) {
 // of which side of the book we're walking — only the type differs.
 template<typename MapType>
 std::vector<Trade> OrderBook::match_against(Order& incoming, MapType& opposite_side) {
-    std::vector<Trade> trades;
+   // empty list to store any trades that may happen
+   std::vector<Trade> trades;
 
-    while (incoming.remaining_qty() > 0 && !opposite_side.empty()) {
-        auto it = opposite_side.begin();
-        PriceLevel& level = it->second;
+   // keep trying to match as long as the incoming orders is not zero and there is something on the opposite side
+   while (incoming.remaining_qty() > 0 && !opposite_side.empty()) {
+      // get the best level on the opposite side to get a potential match with
+      auto it = opposite_side.begin();
+      // get the value from the map first level and assign it to pricelevel level
+      PriceLevel& level = it->second;
+      
+      // Price check: does this order cross the spread?
+      bool price_matches = (incoming.side == Side::BUY)
+         ? (incoming.price >= level.price()) // if aggressor is buying then incoming price has to be geq the first ask level
+         : (incoming.price <= level.price()); // if aggressor is selling then incoming price has to be leq the first bid level
 
-        // Price check: does this order cross the spread?
-        bool price_matches = (incoming.side == Side::BUY)
-            ? (incoming.price >= level.price())
-            : (incoming.price <= level.price());
+      // if it does not cross spread we dont need to match
+      if (!price_matches) break;
 
-        if (!price_matches) break;
+      // Match against orders at this level one at a time (time priority)
+      while (incoming.remaining_qty() > 0 && !level.empty()) {
+         Order& resting = level.front();
 
-        // Match against orders at this level one at a time (time priority)
-        while (incoming.remaining_qty() > 0 && !level.empty()) {
-            Order& resting = level.front();
+         // fill based on which ever is minimum
+         uint32_t fill_qty = std::min(
+            incoming.remaining_qty(),
+            resting.remaining_qty()
+         );
 
-            uint32_t fill_qty = std::min(
-                incoming.remaining_qty(),
-                resting.remaining_qty()
-            );
+         // ── Record the trade ──────────────────────────────────────────────
+         Trade trade;
+         trade.trade_id  = next_trade_id_++;
+         trade.timestamp = incoming.timestamp;
+         trade.instrument = incoming.instrument;
+         trade.price     = resting.price;   // resting order sets the price
+         trade.quantity  = fill_qty;
 
-            // ── Record the trade ──────────────────────────────────────────────
-            Trade trade;
-            trade.trade_id  = next_trade_id_++;
-            trade.timestamp = incoming.timestamp;
-            trade.instrument = incoming.instrument;
-            trade.price     = resting.price;   // resting order sets the price
-            trade.quantity  = fill_qty;
+         if (incoming.side == Side::BUY) {
+            trade.buy_order_id  = incoming.order_id;
+            trade.sell_order_id = resting.order_id;
+            trade.buyer_id      = incoming.user_id;
+            trade.seller_id     = resting.user_id;
+         } else {
+            trade.buy_order_id  = resting.order_id;
+            trade.sell_order_id = incoming.order_id;
+            trade.buyer_id      = resting.user_id;
+            trade.seller_id     = incoming.user_id;
+         }
 
-            if (incoming.side == Side::BUY) {
-                trade.buy_order_id  = incoming.order_id;
-                trade.sell_order_id = resting.order_id;
-                trade.buyer_id      = incoming.user_id;
-                trade.seller_id     = resting.user_id;
-            } else {
-                trade.buy_order_id  = resting.order_id;
-                trade.sell_order_id = incoming.order_id;
-                trade.buyer_id      = resting.user_id;
-                trade.seller_id     = incoming.user_id;
-            }
+         // add the trade to the list 
+         trades.push_back(trade);
 
-            trades.push_back(trade);
+         // ── Update quantities ─────────────────────────────────────────────
+         incoming.filled_qty += fill_qty;
+         resting.filled_qty  += fill_qty;
+         level.reduce_quantity(fill_qty);
 
-            // ── Update quantities ─────────────────────────────────────────────
-            incoming.filled_qty += fill_qty;
-            resting.filled_qty  += fill_qty;
-            level.reduce_quantity(fill_qty);
+         incoming.status = (incoming.remaining_qty() == 0)
+               ? OrderStatus::FILLED : OrderStatus::PARTIALLY_FILLED;
+         resting.status = (resting.remaining_qty() == 0)
+               ? OrderStatus::FILLED : OrderStatus::PARTIALLY_FILLED;
 
-            incoming.status = (incoming.remaining_qty() == 0)
-                ? OrderStatus::FILLED : OrderStatus::PARTIALLY_FILLED;
-            resting.status = (resting.remaining_qty() == 0)
-                ? OrderStatus::FILLED : OrderStatus::PARTIALLY_FILLED;
+         if (resting.is_complete()) {
+               level.pop_front();
+         }
+      }
 
-            if (resting.is_complete()) {
-                level.pop_front();
-            }
-        }
+      // Remove the price level if it's been fully drained
+      if (level.empty()) {
+         opposite_side.erase(it);
+      }
+   }
 
-        // Remove the price level if it's been fully drained
-        if (level.empty()) {
-            opposite_side.erase(it);
-        }
-    }
-
-    return trades;
+   return trades;
 }
 
 // ── Private: match_order ──────────────────────────────────────────────────────
 // Dispatches to the correct side based on incoming order direction
 std::vector<Trade> OrderBook::match_order(Order& incoming) {
-    if (incoming.side == Side::BUY) {
-        return match_against(incoming, asks_);
-    } else {
-        return match_against(incoming, bids_);
-    }
+   // match with opposite side
+   if (incoming.side == Side::BUY) {
+      return match_against(incoming, asks_);
+   } else {
+      return match_against(incoming, bids_);
+   }
 }
 
 // ── Private: rest_order ───────────────────────────────────────────────────────
