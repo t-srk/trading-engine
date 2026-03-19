@@ -64,6 +64,9 @@ std::vector<Trade> MatchingEngine::submit_order(
                     : OrderStatus::PARTIALLY_FILLED;
         }
 
+        // Track market last price for mark-to-market
+        last_prices_[t.instrument] = t.price;
+
         // Update both sides' portfolios
         portfolios_[t.buyer_id].apply_trade(t, t.buyer_id);
         portfolios_[t.seller_id].apply_trade(t, t.seller_id);

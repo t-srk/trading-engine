@@ -163,6 +163,24 @@ html, body, #root {
   user-select: none;
 }
 
+.centre-btn {
+  padding: 2px 8px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--dim);
+  font-family: var(--font);
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  cursor: pointer;
+}
+.centre-btn:hover {
+  background: #f3f4f6;
+  color: var(--text);
+}
+
 .cancel-all-btn {
   padding: 2px 8px;
   border: 1px solid #fca5a5;
@@ -311,6 +329,15 @@ html, body, #root {
 
 /* Row separator */
 .ob-table tbody tr { border-bottom: 1px solid var(--border); }
+
+/* Mid-market row highlight */
+.ob-mid-row .price-cell {
+  background: #fef9c3;
+  color: #713f12;
+  font-weight: 700;
+}
+.ob-mid-row .bid-cell  { background: #fef3c7; }
+.ob-mid-row .ask-cell  { background: #fef3c7; }
 
 /* Own-level indicator */
 .own-level {

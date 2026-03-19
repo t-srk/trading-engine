@@ -76,6 +76,12 @@ public:
         return next_order_id_ - 1;
     }
 
+    // Last traded price for the instrument, or 0.0 if no trades have occurred.
+    double last_traded_price(const std::string& instrument) const {
+        auto it = last_prices_.find(instrument);
+        return it != last_prices_.end() ? it->second : 0.0;
+    }
+
     // Admin operations ────────────────────────────────────────────────────────
 
     // Cancel every resting order across all instruments.
@@ -115,6 +121,9 @@ private:
 
     // Complete record of every trade that happened
     std::vector<Trade> trade_history_;
+
+    // Last traded price per instrument — used for mark-to-market unrealized PnL
+    std::unordered_map<std::string, double> last_prices_;
 
     // Monotonically increasing counters
     uint64_t next_order_id_ = 1;

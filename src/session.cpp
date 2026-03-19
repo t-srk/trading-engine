@@ -39,16 +39,8 @@ void Session::do_accept() {
                 std::cout << "[session] handshake error: " << ec.message() << "\n";
                 return;
             }
-            // Push the current book state to all clients (including this new one)
-            // so a freshly-connected client immediately sees the live book.
-            std::vector<std::string> instrs;
-            {
-                std::lock_guard<std::mutex> lock(server_.mutex());
-                instrs = engine_.instruments();
-            }
-            for (const auto& instr : instrs) {
-                server_.broadcast_book_update(instr);
-            }
+            // Send the current book state only to this new client.
+            server_.send_book_snapshot(self);
             do_read();
         }
     ));
@@ -189,12 +181,11 @@ void Session::handle_submit(const std::string& msg) {
         };
         deliver(ack.dump() + "\n");
 
-        // Notify server of trades for broadcast (outside lock)
-        for (const auto& t : trades) {
+        // Broadcast trades and push updated PnL to all holders (outside lock)
+        for (const auto& t : trades)
             on_trade_(t);
-            server_.send_portfolio_update(t.buyer_id);
-            server_.send_portfolio_update(t.seller_id);
-        }
+        if (!trades.empty())
+            server_.broadcast_portfolio_mark_updates(instrument);
 
         // Broadcast updated book to all clients (outside lock)
         server_.broadcast_book_update(instrument);
@@ -245,7 +236,7 @@ void Session::deliver(const std::string& message) {
 
 // ── handle_admin ──────────────────────────────────────────────────────────────
 void Session::handle_admin(const std::string& msg) {
-    if (user_id_ != "admin") {
+    if (user_id_ != "purplepoet") {
         deliver(json{{"event","error"},{"reason","forbidden"}}.dump() + "\n");
         return;
     }

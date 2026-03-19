@@ -1,23 +1,19 @@
-import { useState, useCallback, useEffect } from 'react';
+import { useState, useCallback, useEffect, useRef, useMemo } from 'react';
 import { useSocket } from './ws/useSocket';
 import { useAuth } from './hooks/useAuth';
 import { useOrderBook } from './hooks/useOrderBook';
 import { usePortfolio } from './hooks/usePortfolio';
 import { useAdmin } from './hooks/useAdmin';
 import { OrderBook } from './components/OrderBook';
+import type { OrderBookHandle } from './components/OrderBook';
 import { Portfolio } from './components/Portfolio';
 import { AdminPanel } from './components/AdminPanel';
 
 const WS_URL     = 'ws://localhost:9000';
 const INSTRUMENT = 'product_1.0';
 
-const TICK   = 0.50;
-const MID    = 100;
-const LEVELS = 20;
-const PRICE_LADDER: number[] = Array.from(
-  { length: LEVELS * 2 + 1 },
-  (_, i) => parseFloat((MID + (LEVELS - i) * TICK).toFixed(2)),
-);
+// Full integer ladder 200 → 0 (high to low, as displayed in the book)
+const PRICE_LADDER: number[] = Array.from({ length: 201 }, (_, i) => 200 - i);
 
 const STATUS_COLOR: Record<string, string> = {
   open:       '#16a34a',
@@ -34,13 +30,22 @@ export function App() {
 
   const [serverMsg, setServerMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
-  const rawSocket = useSocket({ url: WS_URL });
-  const auth      = useAuth(rawSocket);
-  const book      = useOrderBook(auth, INSTRUMENT, lockedUser);
-  const positions = usePortfolio(auth);
-  const admin     = useAdmin(auth, auth.send);
+  const rawSocket    = useSocket({ url: WS_URL });
+  const auth         = useAuth(rawSocket);
+  const book         = useOrderBook(auth, INSTRUMENT, lockedUser);
+  const positions    = usePortfolio(auth);
+  const admin        = useAdmin(auth, auth.send);
+  const orderBookRef = useRef<OrderBookHandle>(null);
 
-  const isAdmin = lockedUser === 'admin';
+  const midPrice = useMemo(() => {
+    if (book.bids.length > 0 && book.asks.length > 0)
+      return Math.round((book.bids[0].price + book.asks[0].price) / 2);
+    if (book.bids.length > 0) return Math.round(book.bids[0].price);
+    if (book.asks.length > 0) return Math.round(book.asks[0].price);
+    return 100;
+  }, [book.bids, book.asks]);
+
+  const isAdmin = lockedUser === 'purplepoet';
 
   // Lock the username once login is acknowledged
   useEffect(() => {
@@ -152,6 +157,9 @@ export function App() {
                   />
                 </label>
               )}
+              <button className="centre-btn" onClick={() => orderBookRef.current?.scrollToMid()}>
+                centre
+              </button>
               <button className="cancel-all-btn" onClick={() => book.cancelAll()}>
                 cancel all
               </button>
@@ -162,8 +170,10 @@ export function App() {
               <div className="login-prompt">Enter a username above and press ↵ to start trading.</div>
             )}
             <OrderBook
+              ref={orderBookRef}
               priceLadder={PRICE_LADDER}
               book={book}
+              midPrice={midPrice}
               onClickBid={handleClickBid}
               onClickAsk={handleClickAsk}
             />

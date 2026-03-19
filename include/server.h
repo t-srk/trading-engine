@@ -20,6 +20,11 @@ public:
     void broadcast_trade(const Trade& trade);
     void broadcast_book_update(const std::string& instrument);
 
+    // Send a snapshot of every instrument's order book to a single session only.
+    // Called on new connection so the client immediately sees the live book
+    // without broadcasting stale noise to all existing clients.
+    void send_book_snapshot(std::shared_ptr<Session> session);
+
     // Called by Session after a successful login.
     // If user_id is already active, the old session receives session_replaced and is closed.
     void register_session(const std::string& user_id, std::shared_ptr<Session> session);
@@ -30,6 +35,11 @@ public:
     // Send a portfolio_update message to one specific user (not a broadcast).
     // Looks up the user's active session and delivers the serialized portfolio.
     void send_portfolio_update(const std::string& user_id);
+
+    // Push a portfolio_update to every active user who holds a position in
+    // instrument, reflecting the latest mark price. Called after every trade
+    // so all holders see updated unrealized PnL immediately.
+    void broadcast_portfolio_mark_updates(const std::string& instrument);
 
     // ── Admin operations ──────────────────────────────────────────────────────
 

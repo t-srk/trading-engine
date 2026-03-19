@@ -79,6 +79,38 @@ void Server::deregister_session(const std::string& user_id, Session* raw) {
     }
 }
 
+void Server::send_book_snapshot(std::shared_ptr<Session> session) {
+    std::vector<std::string> msgs;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (const auto& instr : engine_.instruments()) {
+            const auto& book = engine_.get_book(instr);
+
+            json bids_arr = json::array();
+            int count = 0;
+            for (const auto& kv : book.get_bids()) {
+                if (count++ >= 20) break;
+                bids_arr.push_back({{"price", kv.first}, {"quantity", kv.second.total_quantity()}});
+            }
+
+            json asks_arr = json::array();
+            count = 0;
+            for (const auto& kv : book.get_asks()) {
+                if (count++ >= 20) break;
+                asks_arr.push_back({{"price", kv.first}, {"quantity", kv.second.total_quantity()}});
+            }
+
+            msgs.push_back(json{
+                {"event",      "snapshot"},
+                {"instrument", instr},
+                {"bids",       bids_arr},
+                {"asks",       asks_arr}
+            }.dump() + "\n");
+        }
+    }
+    for (const auto& m : msgs) session->deliver(m);
+}
+
 void Server::broadcast_book_update(const std::string& instrument) {
     std::string serialized;
     std::vector<std::shared_ptr<Session>> live;
@@ -151,13 +183,15 @@ void Server::send_all_portfolios(const std::string& admin_user_id) {
         for (const auto& [uid, portfolio] : engine_.all_portfolios()) {
             json positions_arr = json::array();
             for (const auto& [instr, pos] : portfolio.positions()) {
+                double mark = engine_.last_traded_price(pos.instrument);
+                double upnl = pos.qty * (mark - pos.avg_cost);
                 positions_arr.push_back({
                     {"instrument",    pos.instrument},
                     {"qty",           pos.qty},
                     {"avg_cost",      pos.avg_cost},
                     {"realized_pnl",  pos.realized_pnl},
-                    {"unrealized_pnl",pos.unrealized_pnl()},
-                    {"last_price",    pos.last_price}
+                    {"unrealized_pnl", upnl},
+                    {"last_price",    mark}
                 });
             }
             users_arr.push_back({{"user_id", uid}, {"positions", positions_arr}});
@@ -184,6 +218,19 @@ void Server::broadcast_cleared_portfolios() {
     for (auto& s : live) s->deliver(serialized);
 }
 
+void Server::broadcast_portfolio_mark_updates(const std::string& instrument) {
+    std::vector<std::string> users;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (const auto& [uid, portfolio] : engine_.all_portfolios()) {
+            if (portfolio.positions().count(instrument))
+                users.push_back(uid);
+        }
+    }
+    for (const auto& uid : users)
+        send_portfolio_update(uid);
+}
+
 void Server::send_portfolio_update(const std::string& user_id) {
     std::string serialized;
     std::shared_ptr<Session> session;
@@ -194,13 +241,15 @@ void Server::send_portfolio_update(const std::string& user_id) {
 
         json positions_arr = json::array();
         for (const auto& [instr, pos] : portfolio.positions()) {
+            double mark = engine_.last_traded_price(pos.instrument);
+            double upnl = pos.qty * (mark - pos.avg_cost);
             positions_arr.push_back({
                 {"instrument",    pos.instrument},
                 {"qty",           pos.qty},
                 {"avg_cost",      pos.avg_cost},
                 {"realized_pnl",  pos.realized_pnl},
-                {"unrealized_pnl", pos.unrealized_pnl()},
-                {"last_price",    pos.last_price}
+                {"unrealized_pnl", upnl},
+                {"last_price",    mark}
             });
         }
 
