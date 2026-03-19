@@ -1,31 +1,32 @@
 #include "server.h"
 #include <iostream>
+#include <nlohmann/json.hpp>
+#include <boost/beast/core.hpp>
+namespace beast = boost::beast;
+
+using json = nlohmann::json;
 
 namespace trading {
 
-// ── Constructor ───────────────────────────────────────────────────────────────
-Server::Server(boost::asio::io_context& io_context, uint16_t port)
+Server::Server(net::io_context& io_context, uint16_t port)
     : io_context_(io_context)
     , acceptor_(io_context, tcp::endpoint(tcp::v4(), port))
 {
-    // Register tradeable instruments
     engine_.add_instrument("BTC-USD");
     engine_.add_instrument("ETH-USD");
+    engine_.add_instrument("product_1.0");
 
     std::cout << "[server] listening on port " << port << "\n";
     do_accept();
 }
 
-// ── do_accept ─────────────────────────────────────────────────────────────────
-// Async loop: wait for a connection, create a Session, then wait again.
 void Server::do_accept() {
     acceptor_.async_accept(
-        [this](boost::system::error_code ec, tcp::socket socket) {
+        [this](beast::error_code ec, tcp::socket socket) {
             if (!ec) {
                 std::cout << "[server] client connected: "
                           << socket.remote_endpoint() << "\n";
 
-                // Create the session, passing a callback for trade broadcasts
                 auto session = std::make_shared<Session>(
                     std::move(socket),
                     engine_,
@@ -34,33 +35,28 @@ void Server::do_accept() {
 
                 sessions_.push_back(session);
                 session->start();
-            } else {
-                std::cout << "[server] accept error: " << ec.message() << "\n";
             }
-
-            // Always queue the next accept — keep listening
             do_accept();
         }
     );
 }
 
-// ── broadcast_trade ───────────────────────────────────────────────────────────
-// Send a trade notification to every connected client
 void Server::broadcast_trade(const Trade& trade) {
-    TradeMsg msg;
-    msg.event        = "trade";
-    msg.trade_id     = trade.trade_id;
-    msg.instrument   = trade.instrument;
-    msg.price        = trade.price;
-    msg.quantity     = trade.quantity;
-    msg.buyer_id     = trade.buyer_id;
-    msg.seller_id    = trade.seller_id;
-    msg.buy_order_id  = trade.buy_order_id;
-    msg.sell_order_id = trade.sell_order_id;
+    json msg = {
+        {"event",        "trade"},
+        {"trade_id",     trade.trade_id},
+        {"instrument",   trade.instrument},
+        {"price",        trade.price},
+        {"quantity",     trade.quantity},
+        {"buyer_id",     trade.buyer_id},
+        {"seller_id",    trade.seller_id},
+        {"buy_order_id",  trade.buy_order_id},
+        {"sell_order_id", trade.sell_order_id}
+    };
 
-    std::string serialized = protocol::serialize(msg);
+    std::string serialized = msg.dump() + "\n";
 
-    // Remove dead sessions and broadcast to live ones
+    // Clean up dead sessions
     sessions_.erase(
         std::remove_if(sessions_.begin(), sessions_.end(),
             [](const std::shared_ptr<Session>& s) {

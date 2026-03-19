@@ -1,6 +1,8 @@
 #include "session.h"
 #include <iostream>
-#include <boost/asio.hpp>
+#include <nlohmann/json.hpp>
+
+using json = nlohmann::json;
 
 namespace trading {
 
@@ -8,135 +10,123 @@ namespace trading {
 Session::Session(tcp::socket socket,
                  MatchingEngine& engine,
                  TradeCallback on_trade)
-    : socket_(std::move(socket))
+    : ws_(std::move(socket))
     , engine_(engine)
     , on_trade_(std::move(on_trade))
 {}
 
 // ── start ─────────────────────────────────────────────────────────────────────
 void Session::start() {
-    do_read();
+    do_accept();
+}
+
+// ── do_accept ─────────────────────────────────────────────────────────────────
+// Perform the WebSocket upgrade handshake asynchronously.
+// A browser first sends a plain HTTP request asking to "upgrade" to WebSocket.
+// Beast handles this negotiation automatically.
+void Session::do_accept() {
+    auto self = shared_from_this();
+    ws_.async_accept([this, self](beast::error_code ec) {
+        if (ec) {
+            std::cout << "[session] handshake error: " << ec.message() << "\n";
+            return;
+        }
+        do_read();
+    });
 }
 
 // ── do_read ───────────────────────────────────────────────────────────────────
-// Ask Asio to read bytes from the socket until it sees a newline.
-// When data arrives, handle_message is called with the complete line.
-// Then we immediately queue another read — this keeps the loop alive.
 void Session::do_read() {
-    // shared_from_this() keeps this Session alive for the duration of the async op
     auto self = shared_from_this();
-
-    boost::asio::async_read_until(
-        socket_,
+    ws_.async_read(
         read_buf_,
-        '\n',
-        [this, self](boost::system::error_code ec, std::size_t /*bytes*/) {
+        [this, self](beast::error_code ec, std::size_t /*bytes*/) {
             if (ec) {
-                // Client disconnected or error — just stop reading
-                std::cout << "[session] client disconnected: "
-                          << ec.message() << "\n";
+                std::cout << "[session] disconnected: " << ec.message() << "\n";
                 return;
             }
 
-            // Extract the line from the buffer
-            std::istream stream(&read_buf_);
-            std::string line;
-            std::getline(stream, line);
+            std::string msg = beast::buffers_to_string(read_buf_.data());
+            read_buf_.consume(read_buf_.size());
 
-            if (!line.empty()) {
-                handle_message(line);
-            }
-
-            // Queue the next read immediately — keep the loop alive
+            handle_message(msg);
             do_read();
         }
     );
 }
 
 // ── handle_message ────────────────────────────────────────────────────────────
-// Dispatch incoming JSON to the right handler based on the "action" field
-void Session::handle_message(const std::string& line) {
+void Session::handle_message(const std::string& msg) {
     try {
-        // Peek at the action field to determine message type
-        std::string action = protocol::extract_string(line, "action");
+        auto j      = json::parse(msg);
+        auto action = j.at("action").get<std::string>();
 
-        if (action == "submit") {
-            handle_submit(line);
-        } else if (action == "cancel") {
-            handle_cancel(line);
-        } else {
-            ErrorMsg err;
-            err.event  = "error";
-            err.reason = "Unknown action: " + action;
-            deliver(protocol::serialize(err));
+        if      (action == "submit") handle_submit(msg);
+        else if (action == "cancel") handle_cancel(msg);
+        else {
+            deliver(json{{"event","error"},{"reason","unknown action"}}.dump() + "\n");
         }
     } catch (const std::exception& e) {
-        ErrorMsg err;
-        err.event  = "error";
-        err.reason = std::string("Parse error: ") + e.what();
-        deliver(protocol::serialize(err));
+        deliver(json{{"event","error"},{"reason",e.what()}}.dump() + "\n");
     }
 }
 
 // ── handle_submit ─────────────────────────────────────────────────────────────
-void Session::handle_submit(const std::string& json) {
-    auto msg = protocol::parse_submit(json);
+void Session::handle_submit(const std::string& msg) {
+    auto j = json::parse(msg);
 
-    Side side = (msg.side == "BUY") ? Side::BUY : Side::SELL;
+    std::string user_id    = j.at("user_id").get<std::string>();
+    std::string instrument = j.at("instrument").get<std::string>();
+    std::string side_str   = j.at("side").get<std::string>();
+    double      price      = j.at("price").get<double>();
+    uint32_t    quantity   = j.at("quantity").get<uint32_t>();
+
+    Side side = (side_str == "BUY") ? Side::BUY : Side::SELL;
 
     try {
         auto trades = engine_.submit_order(
-            msg.user_id,
-            msg.instrument,
-            side,
-            msg.price,
-            msg.quantity
-        );
+            user_id, instrument, side, price, quantity);
 
-        // Send ack back to the submitting client
-        AckMsg ack;
-        ack.event      = "ack";
-        ack.instrument = msg.instrument;
-        ack.side       = msg.side;
-        ack.price      = msg.price;
-        ack.quantity   = msg.quantity;
-        ack.status     = "OPEN";
+        uint64_t order_id = engine_.last_order_id();
 
-        // Get the order ID that was just assigned
-        // It's the most recently added order — next_order_id_ - 1
-        const Order* order = engine_.find_order(engine_.last_order_id());
-        if (order) ack.order_id = order->order_id;
+        // Ack back to submitting client
+        json ack = {
+            {"event",      "ack"},
+            {"order_id",   order_id},
+            {"status",     "OPEN"},
+            {"instrument", instrument},
+            {"side",       side_str},
+            {"price",      price},
+            {"quantity",   quantity}
+        };
+        deliver(ack.dump() + "\n");
 
-        deliver(protocol::serialize(ack));
-
-        // Notify server about each trade so it can broadcast
+        // Notify server of trades for broadcast
         for (const auto& t : trades) {
             on_trade_(t);
         }
 
     } catch (const std::exception& e) {
-        ErrorMsg err;
-        err.event  = "error";
-        err.reason = e.what();
-        deliver(protocol::serialize(err));
+        deliver(json{{"event","error"},{"reason",e.what()}}.dump() + "\n");
     }
 }
 
 // ── handle_cancel ─────────────────────────────────────────────────────────────
-void Session::handle_cancel(const std::string& json) {
-    auto msg = protocol::parse_cancel(json);
+void Session::handle_cancel(const std::string& msg) {
+    auto     j        = json::parse(msg);
+    uint64_t order_id = j.at("order_id").get<uint64_t>();
 
-    bool success = engine_.cancel_order(msg.order_id);
+    bool success = engine_.cancel_order(order_id);
 
-    CancelAckMsg ack;
-    ack.event    = "cancel_ack";
-    ack.order_id = msg.order_id;
-    ack.success  = success;
-    deliver(protocol::serialize(ack));
+    json ack = {
+        {"event",    "cancel_ack"},
+        {"order_id", order_id},
+        {"success",  success}
+    };
+    deliver(ack.dump() + "\n");
 }
 
 // ── deliver ───────────────────────────────────────────────────────────────────
-// Queue a message for sending. If the queue was empty, start writing immediately.
 void Session::deliver(const std::string& message) {
     bool write_in_progress = !write_queue_.empty();
     write_queue_.push_back(message);
@@ -146,22 +136,18 @@ void Session::deliver(const std::string& message) {
 }
 
 // ── do_write ──────────────────────────────────────────────────────────────────
-// Write the front of the queue. When done, if more messages are queued,
-// write the next one. This chains writes so they don't interleave.
 void Session::do_write() {
     auto self = shared_from_this();
-
-    boost::asio::async_write(
-        socket_,
-        boost::asio::buffer(write_queue_.front()),
-        [this, self](boost::system::error_code ec, std::size_t /*bytes*/) {
+    ws_.async_write(
+        net::buffer(write_queue_.front()),
+        [this, self](beast::error_code ec, std::size_t /*bytes*/) {
             if (ec) {
                 std::cout << "[session] write error: " << ec.message() << "\n";
                 return;
             }
             write_queue_.pop_front();
             if (!write_queue_.empty()) {
-                do_write();   // chain the next write
+                do_write();
             }
         }
     );

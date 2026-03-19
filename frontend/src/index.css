@@ -1,0 +1,236 @@
+*, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+:root {
+  --bg:           #ffffff;
+  --bg-topbar:    #f9fafb;
+  --border:       #e5e7eb;
+  --text:         #111827;
+  --dim:          #9ca3af;
+
+  --bid-bg:       #fff5f5;
+  --bid-bg-hover: #fecaca;
+  --bid-text:     #b91c1c;
+  --bid-my-bg:    #fee2e2;
+  --bid-my-text:  #7f1d1d;
+
+  --ask-bg:       #f0fdf4;
+  --ask-bg-hover: #bbf7d0;
+  --ask-text:     #15803d;
+  --ask-my-bg:    #dcfce7;
+  --ask-my-text:  #14532d;
+
+  --price-bg:     #f8f9fa;
+  --price-text:   #374151;
+
+  --mine-dot:     #f59e0b;
+
+  --font: 'Consolas', 'Menlo', 'Courier New', monospace;
+}
+
+html, body, #root {
+  height: 100%;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 13px;
+}
+
+/* ── Top bar ──────────────────────────────────────────────────────────────── */
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  padding: 0 20px;
+  height: 44px;
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-topbar);
+}
+
+.product-name {
+  font-size: 15px;
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--text);
+}
+
+.user-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-left: auto;
+  font-size: 11px;
+  color: var(--dim);
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+}
+
+.user-input {
+  width: 100px;
+  padding: 4px 7px;
+  background: var(--bg);
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+}
+.user-input:focus { outline: none; border-color: #6b7280; }
+
+.conn-dot {
+  font-size: 11px;
+  letter-spacing: 0.03em;
+}
+
+/* ── Workspace ────────────────────────────────────────────────────────────── */
+.workspace {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+  padding: 16px;
+  height: calc(100vh - 44px);
+  overflow: auto;
+  background: #f1f3f5;
+}
+
+/* ── Panel (reusable window) ──────────────────────────────────────────────── */
+.panel {
+  display: flex;
+  flex-direction: column;
+  background: #fff;
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  overflow: hidden;
+  /* panels size to their content; add width/height overrides per-panel if needed */
+}
+
+.panel-header {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+  background: var(--bg-topbar);
+  border-bottom: 1px solid var(--border);
+  user-select: none;
+}
+
+.panel-body {
+  overflow-y: auto;
+  max-height: calc(100vh - 44px - 32px - 29px); /* viewport - topbar - workspace pad - panel header */
+}
+
+/* ── Toast (fixed overlay, never shifts layout) ───────────────────────────── */
+.toast {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 100;
+  padding: 8px 14px;
+  border-radius: 4px;
+  font-size: 11px;
+  letter-spacing: 0.03em;
+  border: 1px solid transparent;
+  pointer-events: none;
+  animation: fadeIn 0.1s ease;
+}
+.toast-ok  { background: #f0fdf4; color: #15803d; border-color: #bbf7d0; }
+.toast-err { background: #fff5f5; color: #b91c1c; border-color: #fecaca; }
+
+@keyframes fadeIn { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: translateY(0); } }
+
+/* ── Order book table ─────────────────────────────────────────────────────── */
+.ob-table {
+  border-collapse: collapse;
+  width: 360px;
+}
+
+.ob-table th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 6px 12px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+  border-bottom: 1px solid var(--border);
+  background: var(--bg-topbar);
+}
+
+.th-bid   { text-align: right; background: var(--bid-bg); }
+.th-price { text-align: center; }
+.th-ask   { text-align: left;  background: var(--ask-bg); }
+
+.ob-table td {
+  padding: 3px 12px;
+  height: 26px;
+  vertical-align: middle;
+}
+
+/* Bid cell */
+.bid-cell {
+  text-align: right;
+  background: var(--bid-bg);
+  color: var(--bid-text);
+  cursor: pointer;
+  font-weight: 500;
+  position: relative;
+  border-right: 1px solid var(--border);
+  min-width: 80px;
+}
+.bid-cell:hover { background: var(--bid-bg-hover); }
+.bid-cell.my-order {
+  background: var(--bid-my-bg);
+  color: var(--bid-my-text);
+  font-weight: 700;
+}
+
+/* Price cell */
+.price-cell {
+  text-align: center;
+  background: var(--price-bg);
+  color: var(--price-text);
+  font-size: 12px;
+  width: 80px;
+  border-left: 1px solid var(--border);
+  border-right: 1px solid var(--border);
+  user-select: none;
+}
+
+/* Ask cell */
+.ask-cell {
+  text-align: left;
+  background: var(--ask-bg);
+  color: var(--ask-text);
+  cursor: pointer;
+  font-weight: 500;
+  position: relative;
+  border-left: 1px solid var(--border);
+  min-width: 80px;
+}
+.ask-cell:hover { background: var(--ask-bg-hover); }
+.ask-cell.my-order {
+  background: var(--ask-my-bg);
+  color: var(--ask-my-text);
+  font-weight: 700;
+}
+
+/* Row separator */
+.ob-table tbody tr { border-bottom: 1px solid var(--border); }
+
+/* Own-order dot indicator */
+.mine-marker {
+  display: inline-block;
+  width: 5px;
+  height: 5px;
+  border-radius: 50%;
+  background: var(--mine-dot);
+  margin: 0 5px;
+  vertical-align: middle;
+  position: relative;
+  top: -1px;
+}

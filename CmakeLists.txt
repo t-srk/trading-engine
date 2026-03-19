@@ -11,8 +11,9 @@ else()
     add_compile_options(-Wall -Wextra -Wpedantic -Wshadow)
 endif()
 
-# ── Boost ─────────────────────────────────────────────────────────────────────
+# ── Dependencies ──────────────────────────────────────────────────────────────
 find_package(Boost REQUIRED)
+find_package(nlohmann_json CONFIG REQUIRED)
 
 # ── Shared engine sources ─────────────────────────────────────────────────────
 set(ENGINE_SOURCES
@@ -20,7 +21,7 @@ set(ENGINE_SOURCES
     src/matching_engine.cpp
 )
 
-# ── Main executable (the server) ──────────────────────────────────────────────
+# ── Main executable ───────────────────────────────────────────────────────────
 add_executable(trading_engine
     src/main.cpp
     src/session.cpp
@@ -29,9 +30,12 @@ add_executable(trading_engine
 )
 
 target_include_directories(trading_engine PRIVATE include)
-target_link_libraries(trading_engine PRIVATE Boost::boost)
+target_link_libraries(trading_engine PRIVATE
+    Boost::boost
+    nlohmann_json::nlohmann_json
+)
 
-# ── Tests executable ──────────────────────────────────────────────────────────
+# ── Tests ─────────────────────────────────────────────────────────────────────
 add_executable(tests
     tests/test_order_book.cpp
     ${ENGINE_SOURCES}

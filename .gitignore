@@ -1,6 +1,10 @@
 # Build output — never commit this
 build/
 
+# Frontend dependencies and build output
+frontend/node_modules/
+frontend/dist/
+
 # VSCode local user settings (your machine-specific stuff)
 .vscode/settings.json
 

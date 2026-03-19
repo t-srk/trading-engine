@@ -1,6 +1,8 @@
 #pragma once
 
-#include <boost/asio.hpp>
+#include <boost/beast/core.hpp>
+#include <boost/beast/websocket.hpp>
+#include <boost/asio/ip/tcp.hpp>
 #include <memory>
 #include <string>
 #include <deque>
@@ -8,64 +10,45 @@
 #include "matching_engine.h"
 #include "protocol.h"
 
+namespace beast     = boost::beast;
+namespace websocket = beast::websocket;
+namespace net       = boost::asio;
+using     tcp       = net::ip::tcp;
+
 namespace trading {
-
-using boost::asio::ip::tcp;
-
-// Forward declare Server so Session can call back into it
-class Server;
-
-// ── Session ───────────────────────────────────────────────────────────────────
-// One Session per connected client.
-// Responsibilities:
-//   - Read newline-delimited messages from the client
-//   - Parse and dispatch to the MatchingEngine
-//   - Write responses back to this client
-//   - Tell the Server about trades (so it can broadcast to all clients)
-//
-// Sessions are reference-counted via shared_ptr — the Session stays alive
-// as long as async operations are pending, even if the Server drops its reference.
 
 class Session : public std::enable_shared_from_this<Session> {
 public:
-   using TradeCallback = std::function<void(const Trade&)>;
-   
-   bool socket_alive() const {
-      return socket_.is_open();
-   }
+    using TradeCallback = std::function<void(const Trade&)>;
 
-   Session(tcp::socket socket,
-         MatchingEngine& engine,
-         TradeCallback on_trade);
+    Session(tcp::socket socket,
+            MatchingEngine& engine,
+            TradeCallback on_trade);
 
-   // Start reading from this client
-   void start();
+    // Perform the WebSocket handshake then start reading
+    void start();
 
-   // Write a message to this client (queued, non-blocking)
-   void deliver(const std::string& message);
+    // Queue a message for sending to this client
+    void deliver(const std::string& message);
+
+    bool socket_alive() const {
+        return ws_.is_open();
+    }
 
 private:
-    // ── Async read loop ───────────────────────────────────────────────────────
-    void do_read();
-    void handle_message(const std::string& line);
+    void do_accept();      // WebSocket handshake
+    void do_read();        // async read loop
+    void do_write();       // async write loop
 
-    // ── Async write loop ──────────────────────────────────────────────────────
-    void do_write();
-
-    // ── Message handlers ──────────────────────────────────────────────────────
+    void handle_message(const std::string& msg);
     void handle_submit(const std::string& json);
     void handle_cancel(const std::string& json);
 
-    // ── Members ───────────────────────────────────────────────────────────────
-    tcp::socket      socket_;
-    MatchingEngine&  engine_;
-    TradeCallback    on_trade_;
-
-    // Boost.Asio reads into this buffer until it sees a newline
-    boost::asio::streambuf read_buf_;
-
-    // Outbound message queue — messages waiting to be written
-    std::deque<std::string> write_queue_;
+    websocket::stream<tcp::socket> ws_;
+    MatchingEngine&                engine_;
+    TradeCallback                  on_trade_;
+    beast::flat_buffer             read_buf_;
+    std::deque<std::string>        write_queue_;
 };
 
 } // namespace trading
