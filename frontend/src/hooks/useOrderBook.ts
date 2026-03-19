@@ -82,6 +82,11 @@ export function useOrderBook(
           return next;
         });
       }
+
+      // ── Admin cleared all orders: wipe own highlights ─────────────────────
+      if (msg.event === 'orders_cleared') {
+        setMyOrders(new Map());
+      }
     });
   }, [socket, instrument]);
 

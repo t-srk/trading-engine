@@ -23,9 +23,11 @@ export interface CancelOrderMsg {
 }
 
 export interface AdminMsg {
-  action:  'admin';
-  token:   string;
-  command: 'halt' | 'resume' | 'clear_orders' | 'clear_positions' | 'get_portfolios';
+  action:      'admin';
+  token:       string;
+  command:     'halt' | 'resume' | 'clear_orders' | 'clear_positions' | 'get_portfolios' | 'set_mark_price';
+  instrument?: string;
+  price?:      number;
 }
 
 export type ClientMsg = LoginMsg | SubmitOrderMsg | CancelOrderMsg | AdminMsg;
@@ -124,10 +126,14 @@ export interface AllPortfoliosMsg {
   users: UserPortfolio[];
 }
 
+export interface OrdersClearedMsg {
+  event: 'orders_cleared';
+}
+
 export type ServerMsg =
   | LoginAckMsg | AckMsg | TradeMsg | ErrorMsg | CancelAckMsg
   | BookUpdateMsg | SnapshotMsg | PortfolioUpdateMsg
-  | EngineStatusMsg | AdminAckMsg | AllPortfoliosMsg;
+  | EngineStatusMsg | AdminAckMsg | AllPortfoliosMsg | OrdersClearedMsg;
 
 // Shared shape used by both SnapshotMsg and the derived order book
 export interface PriceLevel {

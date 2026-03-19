@@ -1,5 +1,8 @@
+import { useState } from 'react';
 import type { AdminState } from '../hooks/useAdmin';
 import type { PortfolioPosition } from '../types';
+
+const INSTRUMENTS = ['product_1.0', 'BTC-USD', 'ETH-USD'];
 
 interface Props {
   admin: AdminState;
@@ -48,6 +51,15 @@ function PositionRows({ positions, userId }: { positions: PortfolioPosition[]; u
 }
 
 export function AdminPanel({ admin }: Props) {
+  const [markInstr, setMarkInstr] = useState(INSTRUMENTS[0]);
+  const [markPrice, setMarkPrice] = useState('');
+
+  function handleSetMark() {
+    const p = parseFloat(markPrice);
+    admin.setMarkPrice(markInstr, isNaN(p) ? 0 : p);
+    setMarkPrice('');
+  }
+
   return (
     <div className="admin-panel-body">
       {/* ── Engine status + actions ── */}
@@ -65,6 +77,29 @@ export function AdminPanel({ admin }: Props) {
           <button className="admin-btn admin-btn-clear" onClick={admin.clearPositions}>Clear All Positions</button>
           <button className="admin-btn" onClick={admin.refreshPortfolios}>Refresh</button>
         </div>
+      </div>
+
+      {/* ── Mark price override ── */}
+      <div className="admin-controls">
+        <span className="admin-mark-label">mark price</span>
+        <select
+          className="admin-mark-select"
+          value={markInstr}
+          onChange={e => setMarkInstr(e.target.value)}
+        >
+          {INSTRUMENTS.map(i => <option key={i} value={i}>{i}</option>)}
+        </select>
+        <input
+          className="admin-mark-input"
+          type="number"
+          step="0.01"
+          placeholder="price (blank = market)"
+          value={markPrice}
+          onChange={e => setMarkPrice(e.target.value)}
+        />
+        <button className="admin-btn" onClick={handleSetMark}>
+          {markPrice === '' ? 'Clear Override' : 'Set Mark Price'}
+        </button>
       </div>
 
       {/* ── All-users portfolio table ── */}

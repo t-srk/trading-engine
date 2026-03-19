@@ -13,6 +13,7 @@ export interface AdminState {
   clearOrders:       () => void;
   clearPositions:    () => void;
   refreshPortfolios: () => void;
+  setMarkPrice:      (instrument: string, price: number) => void;
 }
 
 export function useAdmin(
@@ -40,5 +41,9 @@ export function useAdmin(
     send({ action: 'admin', token: '', command: 'get_portfolios' });
   }, [send]);
 
-  return { halted, allUsers, halt, resume, clearOrders, clearPositions, refreshPortfolios };
+  const setMarkPrice = useCallback((instrument: string, price: number) => {
+    send({ action: 'admin', token: '', command: 'set_mark_price', instrument, price });
+  }, [send]);
+
+  return { halted, allUsers, halt, resume, clearOrders, clearPositions, refreshPortfolios, setMarkPrice };
 }

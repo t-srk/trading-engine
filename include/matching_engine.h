@@ -77,9 +77,19 @@ public:
     }
 
     // Last traded price for the instrument, or 0.0 if no trades have occurred.
+    // Admin mark price override takes precedence over market price.
     double last_traded_price(const std::string& instrument) const {
+        auto ov = mark_overrides_.find(instrument);
+        if (ov != mark_overrides_.end()) return ov->second;
         auto it = last_prices_.find(instrument);
         return it != last_prices_.end() ? it->second : 0.0;
+    }
+
+    // Set an admin mark price override for the instrument.
+    // Pass price <= 0 to clear the override and revert to market price.
+    void set_mark_price(const std::string& instrument, double price) {
+        if (price <= 0.0) mark_overrides_.erase(instrument);
+        else              mark_overrides_[instrument] = price;
     }
 
     // Admin operations ────────────────────────────────────────────────────────
@@ -124,6 +134,9 @@ private:
 
     // Last traded price per instrument — used for mark-to-market unrealized PnL
     std::unordered_map<std::string, double> last_prices_;
+
+    // Admin mark price overrides — take precedence over last_prices_
+    std::unordered_map<std::string, double> mark_overrides_;
 
     // Monotonically increasing counters
     uint64_t next_order_id_ = 1;

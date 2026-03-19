@@ -496,7 +496,38 @@ html, body, #root {
 }
 .admin-btn-clear:hover { background: #b91c1c; border-color: #b91c1c; color: #fff; }
 
-.admin-table { overflow-y: auto; max-height: calc(100vh - 44px - 32px - 49px); }
+.admin-table { overflow-y: auto; max-height: calc(100vh - 44px - 32px - 98px); }
+
+.admin-mark-label {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.06em;
+  text-transform: uppercase;
+  color: var(--dim);
+}
+
+.admin-mark-select {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 11px;
+  cursor: pointer;
+}
+
+.admin-mark-input {
+  width: 140px;
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 3px;
+  background: var(--bg);
+  color: var(--text);
+  font-family: var(--font);
+  font-size: 12px;
+}
+.admin-mark-input:focus { outline: none; border-color: #6b7280; }
 
 .admin-th-user { width: 90px; border-right: 1px solid var(--border); }
 .admin-user-cell {

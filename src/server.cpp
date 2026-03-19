@@ -205,6 +205,20 @@ void Server::send_all_portfolios(const std::string& admin_user_id) {
     if (session) session->deliver(serialized);
 }
 
+void Server::broadcast_orders_cleared() {
+    std::string serialized = json{{"event","orders_cleared"}}.dump() + "\n";
+    std::vector<std::shared_ptr<Session>> live;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        sessions_.erase(
+            std::remove_if(sessions_.begin(), sessions_.end(),
+                [](const std::shared_ptr<Session>& s){ return !s->socket_alive(); }),
+            sessions_.end());
+        live = sessions_;
+    }
+    for (auto& s : live) s->deliver(serialized);
+}
+
 void Server::broadcast_cleared_portfolios() {
     std::string serialized =
         json{{"event","portfolio_update"},{"positions",json::array()}}.dump() + "\n";

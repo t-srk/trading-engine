@@ -260,6 +260,7 @@ void Session::handle_admin(const std::string& msg) {
         }
         for (const auto& instr : affected)
             server_.broadcast_book_update(instr);
+        server_.broadcast_orders_cleared();
         deliver(json{{"event","admin_ack"},{"command","clear_orders"},{"success",true}}.dump() + "\n");
 
     } else if (command == "clear_positions") {
@@ -272,6 +273,16 @@ void Session::handle_admin(const std::string& msg) {
 
     } else if (command == "get_portfolios") {
         server_.send_all_portfolios(user_id_);
+
+    } else if (command == "set_mark_price") {
+        auto instrument = j.at("instrument").get<std::string>();
+        double price    = j.at("price").get<double>();
+        {
+            std::lock_guard<std::mutex> lock(server_.mutex());
+            engine_.set_mark_price(instrument, price);
+        }
+        server_.broadcast_portfolio_mark_updates(instrument);
+        deliver(json{{"event","admin_ack"},{"command","set_mark_price"},{"success",true}}.dump() + "\n");
 
     } else {
         deliver(json{{"event","error"},{"reason","unknown admin command"}}.dump() + "\n");

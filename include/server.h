@@ -56,6 +56,9 @@ public:
     // active session so their UI resets immediately.
     void broadcast_cleared_portfolios();
 
+    // After admin clear_orders, tell every client to wipe their resting order highlights.
+    void broadcast_orders_cleared();
+
     // Shared mutex protecting engine_, sessions_, and active_users_.
     // Sessions lock this before touching the matching engine.
     std::mutex& mutex() { return mutex_; }
