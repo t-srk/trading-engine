@@ -1,8 +1,13 @@
 // ── Client → Server ──────────────────────────────────────────────────────────
-// Mirrors SubmitOrderMsg / CancelOrderMsg in include/message.h
+
+export interface LoginMsg {
+  action: 'login';
+  user_id: string;
+}
 
 export interface SubmitOrderMsg {
   action: 'submit';
+  token: string;
   user_id: string;
   instrument: string;
   side: 'BUY' | 'SELL';
@@ -12,11 +17,12 @@ export interface SubmitOrderMsg {
 
 export interface CancelOrderMsg {
   action: 'cancel';
+  token: string;
   user_id: string;
   order_id: number;
 }
 
-export type ClientMsg = SubmitOrderMsg | CancelOrderMsg;
+export type ClientMsg = LoginMsg | SubmitOrderMsg | CancelOrderMsg;
 
 // ── Server → Client ──────────────────────────────────────────────────────────
 // Mirrors AckMsg / TradeMsg / ErrorMsg / CancelAckMsg in include/message.h
@@ -54,6 +60,12 @@ export interface CancelAckMsg {
   success: boolean;
 }
 
+export interface LoginAckMsg {
+  event: 'login_ack';
+  user_id: string;
+  token: string;
+}
+
 // Sent by the server after every submit/cancel and on new client connect.
 // Replaces local book state with the authoritative server view.
 export interface BookUpdateMsg {
@@ -71,7 +83,7 @@ export interface SnapshotMsg {
   asks: PriceLevel[];
 }
 
-export type ServerMsg = AckMsg | TradeMsg | ErrorMsg | CancelAckMsg | BookUpdateMsg | SnapshotMsg;
+export type ServerMsg = LoginAckMsg | AckMsg | TradeMsg | ErrorMsg | CancelAckMsg | BookUpdateMsg | SnapshotMsg;
 
 // Shared shape used by both SnapshotMsg and the derived order book
 export interface PriceLevel {

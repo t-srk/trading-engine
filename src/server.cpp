@@ -42,6 +42,32 @@ void Server::do_accept() {
     );
 }
 
+void Server::register_session(const std::string& user_id,
+                               std::shared_ptr<Session> session) {
+    auto it = active_users_.find(user_id);
+    if (it != active_users_.end()) {
+        if (auto old = it->second.lock()) {
+            // Evict the previous session — deliver notice then close TCP
+            old->deliver(json{{"event","error"},{"reason","session_replaced"}}.dump() + "\n");
+            old->force_close();
+        }
+    }
+    active_users_[user_id] = session;
+    std::cout << "[server] login: " << user_id << "\n";
+}
+
+void Server::deregister_session(const std::string& user_id, Session* raw) {
+    auto it = active_users_.find(user_id);
+    if (it == active_users_.end()) return;
+
+    auto sp = it->second.lock();
+    // Only erase if this is still the same session (not a newer replacement)
+    if (!sp || sp.get() == raw) {
+        active_users_.erase(it);
+        std::cout << "[server] logout: " << user_id << "\n";
+    }
+}
+
 void Server::broadcast_book_update(const std::string& instrument) {
     if (!engine_.has_instrument(instrument)) return;
 

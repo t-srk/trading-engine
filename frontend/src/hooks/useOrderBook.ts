@@ -8,6 +8,7 @@ export interface OrderBookState {
   myBidQty: Map<number, number>;                  // price → own resting qty on bid side
   myAskQty: Map<number, number>;                  // price → own resting qty on ask side
   cancelLevel: (side: 'BUY' | 'SELL', price: number) => void;
+  cancelAll: () => void;
 }
 
 // Tracks own live orders for highlighting — separate from the server book state
@@ -97,5 +98,12 @@ export function useOrderBook(
     }
   }
 
-  return { bids, asks, myBidQty, myAskQty, cancelLevel };
+  // Cancel every own resting order across all levels and sides
+  function cancelAll() {
+    for (const orderId of myOrders.keys()) {
+      socket.send({ action: 'cancel', user_id: userId, order_id: orderId });
+    }
+  }
+
+  return { bids, asks, myBidQty, myAskQty, cancelLevel, cancelAll };
 }

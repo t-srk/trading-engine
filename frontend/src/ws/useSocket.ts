@@ -10,6 +10,8 @@ export interface UseSocketResult {
   send: (msg: ClientMsg) => void;
   /** Register a handler; returns an unsubscribe function. */
   subscribe: (handler: MessageHandler) => () => void;
+  /** Permanently stop reconnecting and close the socket. */
+  disable: () => void;
 }
 
 interface UseSocketOptions {
@@ -27,6 +29,7 @@ export function useSocket({
   const handlersRef     = useRef<Set<MessageHandler>>(new Set());
   const reconnectTimer  = useRef<ReturnType<typeof setTimeout> | null>(null);
   const unmountedRef    = useRef(false);
+  const disabledRef     = useRef(false);
 
   const connect = useCallback(() => {
     if (unmountedRef.current) return;
@@ -42,7 +45,9 @@ export function useSocket({
     ws.onclose = () => {
       if (unmountedRef.current) return;
       setStatus('closed');
-      reconnectTimer.current = setTimeout(connect, reconnectDelayMs);
+      if (!disabledRef.current) {
+        reconnectTimer.current = setTimeout(connect, reconnectDelayMs);
+      }
     };
 
     ws.onerror = () => {
@@ -87,5 +92,11 @@ export function useSocket({
     };
   }, []);
 
-  return { status, send, subscribe };
+  const disable = useCallback(() => {
+    disabledRef.current = true;
+    if (reconnectTimer.current) clearTimeout(reconnectTimer.current);
+    wsRef.current?.close();
+  }, []);
+
+  return { status, send, subscribe, disable };
 }

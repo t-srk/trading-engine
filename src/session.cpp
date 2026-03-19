@@ -1,6 +1,9 @@
 #include "session.h"
-#include "server.h"   // full definition needed to call broadcast_book_update
+#include "server.h"
 #include <iostream>
+#include <atomic>
+#include <chrono>
+#include <cstdio>
 #include <nlohmann/json.hpp>
 
 using json = nlohmann::json;
@@ -51,6 +54,9 @@ void Session::do_read() {
         [this, self](beast::error_code ec, std::size_t /*bytes*/) {
             if (ec) {
                 std::cout << "[session] disconnected: " << ec.message() << "\n";
+                if (authenticated_) {
+                    server_.deregister_session(user_id_, this);
+                }
                 return;
             }
 
@@ -69,6 +75,28 @@ void Session::handle_message(const std::string& msg) {
         auto j      = json::parse(msg);
         auto action = j.at("action").get<std::string>();
 
+        if (action == "login") {
+            if (authenticated_) {
+                deliver(json{{"event","error"},{"reason","already authenticated"}}.dump() + "\n");
+                return;
+            }
+            handle_login(msg);
+            return;
+        }
+
+        if (!authenticated_) {
+            deliver(json{{"event","error"},{"reason","unauthorized"}}.dump() + "\n");
+            return;
+        }
+
+        // Every post-login message must carry the session token
+        auto token_it = j.find("token");
+        std::string incoming = (token_it != j.end()) ? token_it->get<std::string>() : "";
+        if (incoming != token_) {
+            deliver(json{{"event","error"},{"reason","unauthorized"}}.dump() + "\n");
+            return;
+        }
+
         if      (action == "submit") handle_submit(msg);
         else if (action == "cancel") handle_cancel(msg);
         else {
@@ -77,6 +105,37 @@ void Session::handle_message(const std::string& msg) {
     } catch (const std::exception& e) {
         deliver(json{{"event","error"},{"reason",e.what()}}.dump() + "\n");
     }
+}
+
+// ── handle_login ──────────────────────────────────────────────────────────────
+void Session::handle_login(const std::string& msg) {
+    auto j       = json::parse(msg);
+    auto user_id = j.at("user_id").get<std::string>();
+
+    // Generate a token: 16-hex timestamp + 16-hex monotonic counter
+    static std::atomic<uint64_t> counter{0};
+    uint64_t ts = static_cast<uint64_t>(
+        std::chrono::steady_clock::now().time_since_epoch().count());
+    uint64_t n  = ++counter;
+    char buf[33];
+    std::snprintf(buf, sizeof(buf), "%016llx%016llx",
+                  static_cast<unsigned long long>(ts),
+                  static_cast<unsigned long long>(n));
+
+    token_         = std::string(buf);
+    user_id_       = user_id;
+    authenticated_ = true;
+
+    // Register — may evict an existing session for this user_id
+    server_.register_session(user_id_, shared_from_this());
+
+    deliver(json{{"event","login_ack"},{"user_id",user_id_},{"token",token_}}.dump() + "\n");
+}
+
+// ── force_close ───────────────────────────────────────────────────────────────
+void Session::force_close() {
+    beast::error_code ec;
+    ws_.next_layer().close(ec);
 }
 
 // ── handle_submit ─────────────────────────────────────────────────────────────

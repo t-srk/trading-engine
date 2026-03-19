@@ -37,6 +37,9 @@ public:
     // Queue a message for sending to this client
     void deliver(const std::string& message);
 
+    // Close the underlying TCP socket — called by Server when evicting a session
+    void force_close();
+
     bool socket_alive() const {
         return ws_.is_open();
     }
@@ -47,6 +50,7 @@ private:
     void do_write();       // async write loop
 
     void handle_message(const std::string& msg);
+    void handle_login(const std::string& json);
     void handle_submit(const std::string& json);
     void handle_cancel(const std::string& json);
 
@@ -56,6 +60,10 @@ private:
     TradeCallback                  on_trade_;
     beast::flat_buffer             read_buf_;
     std::deque<std::string>        write_queue_;
+
+    bool        authenticated_ = false;
+    std::string token_;
+    std::string user_id_;
 };
 
 } // namespace trading
