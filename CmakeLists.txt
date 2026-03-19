@@ -5,6 +5,10 @@ set(CMAKE_CXX_STANDARD 17)
 set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
+if(WIN32)
+    add_compile_definitions(_WIN32_WINNT=0x0A00)
+endif()
+
 if(MSVC)
     add_compile_options(/W4 /WX- /permissive- /wd4100 /wd4702)
 else()
@@ -19,6 +23,7 @@ find_package(nlohmann_json CONFIG REQUIRED)
 set(ENGINE_SOURCES
     src/order_book.cpp
     src/matching_engine.cpp
+    src/portfolio.cpp
 )
 
 # ── Main executable ───────────────────────────────────────────────────────────

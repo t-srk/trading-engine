@@ -29,12 +29,16 @@ void Server::do_accept() {
 
                 auto session = std::make_shared<Session>(
                     std::move(socket),
+                    io_context_,
                     engine_,
                     *this,
                     [this](const Trade& t) { broadcast_trade(t); }
                 );
 
-                sessions_.push_back(session);
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    sessions_.push_back(session);
+                }
                 session->start();
             }
             do_accept();
@@ -44,19 +48,26 @@ void Server::do_accept() {
 
 void Server::register_session(const std::string& user_id,
                                std::shared_ptr<Session> session) {
-    auto it = active_users_.find(user_id);
-    if (it != active_users_.end()) {
-        if (auto old = it->second.lock()) {
-            // Evict the previous session — deliver notice then close TCP
-            old->deliver(json{{"event","error"},{"reason","session_replaced"}}.dump() + "\n");
-            old->force_close();
+    std::shared_ptr<Session> old_session;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        auto it = active_users_.find(user_id);
+        if (it != active_users_.end()) {
+            old_session = it->second.lock();
         }
+        active_users_[user_id] = session;
+        std::cout << "[server] login: " << user_id << "\n";
     }
-    active_users_[user_id] = session;
-    std::cout << "[server] login: " << user_id << "\n";
+    // Deliver and close the old session OUTSIDE the lock to avoid deadlock
+    // (deliver() itself posts to the session's strand, so this is safe).
+    if (old_session) {
+        old_session->deliver(json{{"event","error"},{"reason","session_replaced"}}.dump() + "\n");
+        old_session->force_close();
+    }
 }
 
 void Server::deregister_session(const std::string& user_id, Session* raw) {
+    std::lock_guard<std::mutex> lock(mutex_);
     auto it = active_users_.find(user_id);
     if (it == active_users_.end()) return;
 
@@ -69,72 +80,111 @@ void Server::deregister_session(const std::string& user_id, Session* raw) {
 }
 
 void Server::broadcast_book_update(const std::string& instrument) {
-    if (!engine_.has_instrument(instrument)) return;
+    std::string serialized;
+    std::vector<std::shared_ptr<Session>> live;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
 
-    const auto& book = engine_.get_book(instrument);
+        if (!engine_.has_instrument(instrument)) return;
 
-    // Bids: already sorted highest → lowest by std::greater, take top 20
-    json bids_arr = json::array();
-    int count = 0;
-    for (const auto& kv : book.get_bids()) {
-        if (count++ >= 20) break;
-        bids_arr.push_back({{"price", kv.first}, {"quantity", kv.second.total_quantity()}});
+        const auto& book = engine_.get_book(instrument);
+
+        // Bids: sorted highest → lowest, take top 20
+        json bids_arr = json::array();
+        int count = 0;
+        for (const auto& kv : book.get_bids()) {
+            if (count++ >= 20) break;
+            bids_arr.push_back({{"price", kv.first}, {"quantity", kv.second.total_quantity()}});
+        }
+
+        // Asks: sorted lowest → highest, take top 20
+        json asks_arr = json::array();
+        count = 0;
+        for (const auto& kv : book.get_asks()) {
+            if (count++ >= 20) break;
+            asks_arr.push_back({{"price", kv.first}, {"quantity", kv.second.total_quantity()}});
+        }
+
+        json msg = {
+            {"event",      "book_update"},
+            {"instrument", instrument},
+            {"bids",       bids_arr},
+            {"asks",       asks_arr}
+        };
+        serialized = msg.dump() + "\n";
+
+        // Prune dead sessions and snapshot the live ones
+        sessions_.erase(
+            std::remove_if(sessions_.begin(), sessions_.end(),
+                [](const std::shared_ptr<Session>& s) { return !s->socket_alive(); }),
+            sessions_.end()
+        );
+        live = sessions_;
     }
+    // Deliver outside the lock — deliver() posts to each session's strand
+    for (auto& s : live) s->deliver(serialized);
+}
 
-    // Asks: already sorted lowest → highest, take top 20
-    json asks_arr = json::array();
-    count = 0;
-    for (const auto& kv : book.get_asks()) {
-        if (count++ >= 20) break;
-        asks_arr.push_back({{"price", kv.first}, {"quantity", kv.second.total_quantity()}});
+void Server::send_portfolio_update(const std::string& user_id) {
+    std::string serialized;
+    std::shared_ptr<Session> session;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        const auto& portfolio = engine_.get_portfolio(user_id);
+
+        json positions_arr = json::array();
+        for (const auto& [instr, pos] : portfolio.positions()) {
+            positions_arr.push_back({
+                {"instrument",    pos.instrument},
+                {"qty",           pos.qty},
+                {"avg_cost",      pos.avg_cost},
+                {"realized_pnl",  pos.realized_pnl},
+                {"unrealized_pnl", pos.unrealized_pnl()},
+                {"last_price",    pos.last_price}
+            });
+        }
+
+        json msg = {
+            {"event",     "portfolio_update"},
+            {"positions", positions_arr}
+        };
+        serialized = msg.dump() + "\n";
+
+        auto it = active_users_.find(user_id);
+        if (it != active_users_.end()) {
+            session = it->second.lock();
+        }
     }
-
-    json msg = {
-        {"event",      "book_update"},
-        {"instrument", instrument},
-        {"bids",       bids_arr},
-        {"asks",       asks_arr}
-    };
-    std::string serialized = msg.dump() + "\n";
-
-    sessions_.erase(
-        std::remove_if(sessions_.begin(), sessions_.end(),
-            [](const std::shared_ptr<Session>& s) { return !s->socket_alive(); }),
-        sessions_.end()
-    );
-
-    for (auto& session : sessions_) {
-        session->deliver(serialized);
-    }
+    // Deliver outside the lock — deliver() posts to the session's strand
+    if (session) session->deliver(serialized);
 }
 
 void Server::broadcast_trade(const Trade& trade) {
     json msg = {
-        {"event",        "trade"},
-        {"trade_id",     trade.trade_id},
-        {"instrument",   trade.instrument},
-        {"price",        trade.price},
-        {"quantity",     trade.quantity},
-        {"buyer_id",     trade.buyer_id},
-        {"seller_id",    trade.seller_id},
+        {"event",         "trade"},
+        {"trade_id",      trade.trade_id},
+        {"instrument",    trade.instrument},
+        {"price",         trade.price},
+        {"quantity",      trade.quantity},
+        {"buyer_id",      trade.buyer_id},
+        {"seller_id",     trade.seller_id},
         {"buy_order_id",  trade.buy_order_id},
         {"sell_order_id", trade.sell_order_id}
     };
 
     std::string serialized = msg.dump() + "\n";
-
-    // Clean up dead sessions
-    sessions_.erase(
-        std::remove_if(sessions_.begin(), sessions_.end(),
-            [](const std::shared_ptr<Session>& s) {
-                return !s->socket_alive();
-            }),
-        sessions_.end()
-    );
-
-    for (auto& session : sessions_) {
-        session->deliver(serialized);
+    std::vector<std::shared_ptr<Session>> live;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        sessions_.erase(
+            std::remove_if(sessions_.begin(), sessions_.end(),
+                [](const std::shared_ptr<Session>& s) { return !s->socket_alive(); }),
+            sessions_.end()
+        );
+        live = sessions_;
     }
+    for (auto& s : live) s->deliver(serialized);
 }
 
 } // namespace trading

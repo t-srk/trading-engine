@@ -7,6 +7,7 @@
 #include <stdexcept>
 #include "order.h"
 #include "order_book.h"
+#include "portfolio.h"
 
 namespace trading {
 
@@ -75,9 +76,23 @@ public:
         return next_order_id_ - 1;
     }
 
+    // Returns the portfolio for user_id; returns an empty portfolio if the user
+    // has never traded (should not happen in normal flow).
+    const Portfolio& get_portfolio(const std::string& user_id) const {
+        auto it = portfolios_.find(user_id);
+        if (it == portfolios_.end()) {
+            static const Portfolio empty;
+            return empty;
+        }
+        return it->second;
+    }
+
 private:
     // One OrderBook per instrument
-    std::unordered_map<std::string, OrderBook> books_;
+    std::unordered_map<std::string, OrderBook>  books_;
+
+    // One Portfolio per user (created on first trade)
+    std::unordered_map<std::string, Portfolio>  portfolios_;
 
     // All orders ever submitted, keyed by order_id
     // This is how we support cancellation — we need to find the order fast

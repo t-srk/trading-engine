@@ -46,7 +46,7 @@ std::vector<Trade> MatchingEngine::submit_order(
     orders_[id].filled_qty = order.filled_qty;
     orders_[id].status     = order.status;
 
-    // Sync resting orders that got filled, and record trades
+    // Sync resting orders that got filled, record trades, update portfolios
     for (const auto& t : trades) {
         trade_history_.push_back(t);
 
@@ -62,6 +62,10 @@ std::vector<Trade> MatchingEngine::submit_order(
                     ? OrderStatus::FILLED
                     : OrderStatus::PARTIALLY_FILLED;
         }
+
+        // Update both sides' portfolios
+        portfolios_[t.buyer_id].apply_trade(t, t.buyer_id);
+        portfolios_[t.seller_id].apply_trade(t, t.seller_id);
     }
 
     return trades;

@@ -2,7 +2,9 @@ import { useState, useCallback, useEffect } from 'react';
 import { useSocket } from './ws/useSocket';
 import { useAuth } from './hooks/useAuth';
 import { useOrderBook } from './hooks/useOrderBook';
+import { usePortfolio } from './hooks/usePortfolio';
 import { OrderBook } from './components/OrderBook';
+import { Portfolio } from './components/Portfolio';
 
 const WS_URL     = 'ws://localhost:9000';
 const INSTRUMENT = 'product_1.0';
@@ -29,9 +31,10 @@ export function App() {
 
   const [serverMsg, setServerMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
-  const rawSocket = useSocket({ url: WS_URL });
-  const auth      = useAuth(rawSocket);
-  const book      = useOrderBook(auth, INSTRUMENT, lockedUser);
+  const rawSocket  = useSocket({ url: WS_URL });
+  const auth       = useAuth(rawSocket);
+  const book       = useOrderBook(auth, INSTRUMENT, lockedUser);
+  const positions  = usePortfolio(auth);
 
   // Lock the username once login is acknowledged
   useEffect(() => {
@@ -51,9 +54,7 @@ export function App() {
     let timer: ReturnType<typeof setTimeout>;
     return auth.subscribe(msg => {
       clearTimeout(timer);
-      if (msg.event === 'ack') {
-        setServerMsg({ text: `ack #${msg.order_id} — ${msg.side} ${msg.quantity} @ ${msg.price}`, ok: true });
-      } else if (msg.event === 'error' && msg.reason !== 'session_replaced') {
+      if (msg.event === 'error' && msg.reason !== 'session_replaced') {
         setServerMsg({ text: `error: ${msg.reason}`, ok: false });
       } else if (msg.event === 'cancel_ack') {
         setServerMsg({ text: `cancel ${msg.success ? 'ok' : 'failed'} #${msg.order_id}`, ok: msg.success });
@@ -134,6 +135,12 @@ export function App() {
               onClickBid={handleClickBid}
               onClickAsk={handleClickAsk}
             />
+          </div>
+        </div>
+        <div className="panel">
+          <div className="panel-header">Portfolio</div>
+          <div className={`panel-body${!auth.loggedIn ? ' panel-disabled' : ''}`}>
+            <Portfolio positions={positions} />
           </div>
         </div>
       </main>

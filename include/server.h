@@ -3,6 +3,7 @@
 #include <boost/asio.hpp>
 #include <vector>
 #include <memory>
+#include <mutex>
 #include <unordered_map>
 #include <string>
 #include "matching_engine.h"
@@ -26,6 +27,14 @@ public:
     // Called by Session on disconnect to clean up the active_users_ entry.
     void deregister_session(const std::string& user_id, Session* raw);
 
+    // Send a portfolio_update message to one specific user (not a broadcast).
+    // Looks up the user's active session and delivers the serialized portfolio.
+    void send_portfolio_update(const std::string& user_id);
+
+    // Shared mutex protecting engine_, sessions_, and active_users_.
+    // Sessions lock this before touching the matching engine.
+    std::mutex& mutex() { return mutex_; }
+
 private:
     void do_accept();
 
@@ -36,6 +45,8 @@ private:
 
     // user_id → their current authenticated session (weak to avoid ownership cycles)
     std::unordered_map<std::string, std::weak_ptr<Session>> active_users_;
+
+    mutable std::mutex mutex_;
 };
 
 } // namespace trading

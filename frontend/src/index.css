@@ -351,3 +351,62 @@ html, body, #root {
   border-color: #dc2626;
   color: #fff;
 }
+
+/* ── Portfolio table ──────────────────────────────────────────────────────────── */
+.pf-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 460px;
+}
+
+.pf-col-instr { width: 120px; }
+.pf-col-num   { width: 80px; }
+
+.pf-th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 6px 12px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+  background: var(--bg-topbar);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+.pf-th-r { text-align: right; }
+
+.pf-td {
+  padding: 4px 12px;
+  height: 26px;
+  font-size: 12px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border);
+}
+.pf-td-r { text-align: right; }
+
+.pf-instr {
+  font-weight: 500;
+  color: var(--text);
+  letter-spacing: 0.03em;
+}
+
+.pf-qty { font-weight: 600; }
+.pf-long  { color: #166534; }   /* green-800 — same as ask text */
+.pf-short { color: #991b1b; }   /* red-800   — same as bid text */
+
+.pf-pnl   { font-weight: 500; }
+.pf-total { font-weight: 700; }
+.pf-pos   { color: #166534; }
+.pf-neg   { color: #991b1b; }
+
+.pf-empty {
+  padding: 20px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--dim);
+  letter-spacing: 0.03em;
+}

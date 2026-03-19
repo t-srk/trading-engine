@@ -83,7 +83,21 @@ export interface SnapshotMsg {
   asks: PriceLevel[];
 }
 
-export type ServerMsg = LoginAckMsg | AckMsg | TradeMsg | ErrorMsg | CancelAckMsg | BookUpdateMsg | SnapshotMsg;
+export interface PortfolioPosition {
+  instrument:    string;
+  qty:           number;
+  avg_cost:      number;
+  realized_pnl:  number;
+  unrealized_pnl: number;
+  last_price:    number;
+}
+
+export interface PortfolioUpdateMsg {
+  event:     'portfolio_update';
+  positions: PortfolioPosition[];
+}
+
+export type ServerMsg = LoginAckMsg | AckMsg | TradeMsg | ErrorMsg | CancelAckMsg | BookUpdateMsg | SnapshotMsg | PortfolioUpdateMsg;
 
 // Shared shape used by both SnapshotMsg and the derived order book
 export interface PriceLevel {

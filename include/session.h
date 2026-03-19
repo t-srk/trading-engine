@@ -3,6 +3,7 @@
 #include <boost/beast/core.hpp>
 #include <boost/beast/websocket.hpp>
 #include <boost/asio/ip/tcp.hpp>
+#include <boost/asio/strand.hpp>
 #include <memory>
 #include <string>
 #include <deque>
@@ -27,6 +28,7 @@ public:
     using TradeCallback = std::function<void(const Trade&)>;
 
     Session(tcp::socket socket,
+            net::io_context& io_context,
             MatchingEngine& engine,
             Server& server,
             TradeCallback on_trade);
@@ -34,7 +36,7 @@ public:
     // Perform the WebSocket handshake then start reading
     void start();
 
-    // Queue a message for sending to this client
+    // Queue a message for sending to this client (thread-safe: posts to strand)
     void deliver(const std::string& message);
 
     // Close the underlying TCP socket — called by Server when evicting a session
@@ -54,7 +56,12 @@ private:
     void handle_submit(const std::string& json);
     void handle_cancel(const std::string& json);
 
-    websocket::stream<tcp::socket> ws_;
+    // strand_ MUST be declared before ws_ — C++ initializes members in declaration
+    // order, and strand_ must be constructed from the socket's executor before the
+    // socket is moved into ws_.
+    net::strand<net::io_context::executor_type> strand_;
+    websocket::stream<tcp::socket>              ws_;
+
     MatchingEngine&                engine_;
     Server&                        server_;
     TradeCallback                  on_trade_;
