@@ -1,4 +1,5 @@
 #include "session.h"
+#include "server.h"   // full definition needed to call broadcast_book_update
 #include <iostream>
 #include <nlohmann/json.hpp>
 
@@ -9,9 +10,11 @@ namespace trading {
 // ── Constructor ───────────────────────────────────────────────────────────────
 Session::Session(tcp::socket socket,
                  MatchingEngine& engine,
+                 Server& server,
                  TradeCallback on_trade)
     : ws_(std::move(socket))
     , engine_(engine)
+    , server_(server)
     , on_trade_(std::move(on_trade))
 {}
 
@@ -30,6 +33,11 @@ void Session::do_accept() {
         if (ec) {
             std::cout << "[session] handshake error: " << ec.message() << "\n";
             return;
+        }
+        // Push the current book state to all clients (including this new one)
+        // so a freshly-connected client immediately sees the live book.
+        for (const auto& instr : engine_.instruments()) {
+            server_.broadcast_book_update(instr);
         }
         do_read();
     });
@@ -106,6 +114,9 @@ void Session::handle_submit(const std::string& msg) {
             on_trade_(t);
         }
 
+        // Broadcast updated book to all clients
+        server_.broadcast_book_update(instrument);
+
     } catch (const std::exception& e) {
         deliver(json{{"event","error"},{"reason",e.what()}}.dump() + "\n");
     }
@@ -116,6 +127,10 @@ void Session::handle_cancel(const std::string& msg) {
     auto     j        = json::parse(msg);
     uint64_t order_id = j.at("order_id").get<uint64_t>();
 
+    // Look up the instrument before cancelling so we can broadcast after
+    const Order* o          = engine_.find_order(order_id);
+    std::string  instrument = o ? o->instrument : "";
+
     bool success = engine_.cancel_order(order_id);
 
     json ack = {
@@ -124,6 +139,10 @@ void Session::handle_cancel(const std::string& msg) {
         {"success",  success}
     };
     deliver(ack.dump() + "\n");
+
+    if (success && !instrument.empty()) {
+        server_.broadcast_book_update(instrument);
+    }
 }
 
 // ── deliver ───────────────────────────────────────────────────────────────────

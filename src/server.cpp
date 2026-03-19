@@ -30,6 +30,7 @@ void Server::do_accept() {
                 auto session = std::make_shared<Session>(
                     std::move(socket),
                     engine_,
+                    *this,
                     [this](const Trade& t) { broadcast_trade(t); }
                 );
 
@@ -39,6 +40,46 @@ void Server::do_accept() {
             do_accept();
         }
     );
+}
+
+void Server::broadcast_book_update(const std::string& instrument) {
+    if (!engine_.has_instrument(instrument)) return;
+
+    const auto& book = engine_.get_book(instrument);
+
+    // Bids: already sorted highest → lowest by std::greater, take top 20
+    json bids_arr = json::array();
+    int count = 0;
+    for (const auto& kv : book.get_bids()) {
+        if (count++ >= 20) break;
+        bids_arr.push_back({{"price", kv.first}, {"quantity", kv.second.total_quantity()}});
+    }
+
+    // Asks: already sorted lowest → highest, take top 20
+    json asks_arr = json::array();
+    count = 0;
+    for (const auto& kv : book.get_asks()) {
+        if (count++ >= 20) break;
+        asks_arr.push_back({{"price", kv.first}, {"quantity", kv.second.total_quantity()}});
+    }
+
+    json msg = {
+        {"event",      "book_update"},
+        {"instrument", instrument},
+        {"bids",       bids_arr},
+        {"asks",       asks_arr}
+    };
+    std::string serialized = msg.dump() + "\n";
+
+    sessions_.erase(
+        std::remove_if(sessions_.begin(), sessions_.end(),
+            [](const std::shared_ptr<Session>& s) { return !s->socket_alive(); }),
+        sessions_.end()
+    );
+
+    for (auto& session : sessions_) {
+        session->deliver(serialized);
+    }
 }
 
 void Server::broadcast_trade(const Trade& trade) {

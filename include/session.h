@@ -10,6 +10,11 @@
 #include "matching_engine.h"
 #include "protocol.h"
 
+// Forward-declare Server to avoid a circular include.
+// server.h includes session.h, so session.h cannot include server.h.
+// The full definition is pulled in by session.cpp which includes server.h directly.
+namespace trading { class Server; }
+
 namespace beast     = boost::beast;
 namespace websocket = beast::websocket;
 namespace net       = boost::asio;
@@ -23,6 +28,7 @@ public:
 
     Session(tcp::socket socket,
             MatchingEngine& engine,
+            Server& server,
             TradeCallback on_trade);
 
     // Perform the WebSocket handshake then start reading
@@ -46,6 +52,7 @@ private:
 
     websocket::stream<tcp::socket> ws_;
     MatchingEngine&                engine_;
+    Server&                        server_;
     TradeCallback                  on_trade_;
     beast::flat_buffer             read_buf_;
     std::deque<std::string>        write_queue_;

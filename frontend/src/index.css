@@ -7,20 +7,22 @@
   --text:         #111827;
   --dim:          #9ca3af;
 
-  --bid-bg:       #fff5f5;
-  --bid-bg-hover: #fecaca;
-  --bid-text:     #b91c1c;
-  --bid-my-bg:    #fee2e2;
-  --bid-my-text:  #7f1d1d;
+  --bid-bg:       #fecaca;   /* red-200  — noticeably red */
+  --bid-bg-hover: #fca5a5;   /* red-300  — darker on hover */
+  --bid-text:     #991b1b;   /* red-800  */
+  --bid-my-bg:    #f87171;   /* red-400  — own order highlight */
+  --bid-my-text:  #fff;
+  --bid-own-bg:   #fff6f6;   /* near-white with barely-there red tint */
 
-  --ask-bg:       #f0fdf4;
-  --ask-bg-hover: #bbf7d0;
-  --ask-text:     #15803d;
-  --ask-my-bg:    #dcfce7;
-  --ask-my-text:  #14532d;
+  --ask-bg:       #bbf7d0;   /* green-200 — noticeably green */
+  --ask-bg-hover: #86efac;   /* green-300 — darker on hover */
+  --ask-text:     #166534;   /* green-800 */
+  --ask-my-bg:    #4ade80;   /* green-400 — own order highlight */
+  --ask-my-text:  #fff;
+  --ask-own-bg:   #f5fff8;   /* near-white with barely-there green tint */
 
-  --price-bg:     #f8f9fa;
-  --price-text:   #374151;
+  --price-bg:     #fffbeb;   /* amber-50  — warm off-white gold */
+  --price-text:   #78350f;   /* amber-900 — warm dark text */
 
   --mine-dot:     #f59e0b;
 
@@ -161,9 +163,16 @@ html, body, #root {
   background: var(--bg-topbar);
 }
 
-.th-bid   { text-align: right; background: var(--bid-bg); }
-.th-price { text-align: center; }
-.th-ask   { text-align: left;  background: var(--ask-bg); }
+.th-own-bid  { background: var(--bid-own-bg); border-right: 1px solid var(--border); }
+.th-bid      { text-align: right;  background: var(--bid-bg); }
+.th-price    { text-align: center; }
+.th-ask      { text-align: left;   background: var(--ask-bg); }
+.th-own-ask  { background: var(--ask-own-bg); border-left:  1px solid var(--border); }
+
+.col-own   { width: 56px; }
+.col-bid   { width: 80px; }
+.col-price { width: 80px; }
+.col-ask   { width: 80px; }
 
 .ob-table td {
   padding: 3px 12px;
@@ -171,66 +180,97 @@ html, body, #root {
   vertical-align: middle;
 }
 
-/* Bid cell */
+/* Own bid column: × on outer edge, qty toward center */
+.own-bid-cell {
+  text-align: right;
+  background: var(--bid-own-bg);
+  border-right: 1px solid var(--border);
+  padding: 3px 5px;
+}
+
+/* Bid qty column */
 .bid-cell {
   text-align: right;
   background: var(--bid-bg);
   color: var(--bid-text);
   cursor: pointer;
   font-weight: 500;
-  position: relative;
-  border-right: 1px solid var(--border);
-  min-width: 80px;
+  padding: 3px 10px;
 }
-.bid-cell:hover { background: var(--bid-bg-hover); }
-.bid-cell.my-order {
-  background: var(--bid-my-bg);
-  color: var(--bid-my-text);
-  font-weight: 700;
-}
+.bid-cell:hover    { background: var(--bid-bg-hover); }
+.bid-cell.my-order { background: var(--bid-my-bg); color: var(--bid-my-text); font-weight: 700; }
 
-/* Price cell */
+/* Price column */
 .price-cell {
   text-align: center;
   background: var(--price-bg);
   color: var(--price-text);
   font-size: 12px;
-  width: 80px;
   border-left: 1px solid var(--border);
   border-right: 1px solid var(--border);
   user-select: none;
+  padding: 3px 8px;
 }
 
-/* Ask cell */
+/* Ask qty column */
 .ask-cell {
   text-align: left;
   background: var(--ask-bg);
   color: var(--ask-text);
   cursor: pointer;
   font-weight: 500;
-  position: relative;
-  border-left: 1px solid var(--border);
-  min-width: 80px;
+  padding: 3px 10px;
 }
-.ask-cell:hover { background: var(--ask-bg-hover); }
-.ask-cell.my-order {
-  background: var(--ask-my-bg);
-  color: var(--ask-my-text);
-  font-weight: 700;
+.ask-cell:hover    { background: var(--ask-bg-hover); }
+.ask-cell.my-order { background: var(--ask-my-bg); color: var(--ask-my-text); font-weight: 700; }
+
+/* Own ask column: qty toward center, × on outer edge */
+.own-ask-cell {
+  text-align: left;
+  background: var(--ask-own-bg);
+  border-left: 1px solid var(--border);
+  padding: 3px 5px;
 }
 
 /* Row separator */
 .ob-table tbody tr { border-bottom: 1px solid var(--border); }
 
-/* Own-order dot indicator */
-.mine-marker {
-  display: inline-block;
-  width: 5px;
-  height: 5px;
-  border-radius: 50%;
-  background: var(--mine-dot);
-  margin: 0 5px;
-  vertical-align: middle;
-  position: relative;
-  top: -1px;
+/* Own-level indicator */
+.own-level {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  white-space: nowrap;
+  width: 100%;
+}
+
+.own-bid-level { justify-content: flex-end; }  /* × left, qty right → whole thing right-aligned */
+.own-ask-level { justify-content: flex-start; } /* qty left, × right → whole thing left-aligned */
+
+.own-qty {
+  font-size: 11px;
+  font-weight: 600;
+  color: #6b7280;
+}
+
+.cancel-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 15px;
+  height: 15px;
+  padding: 0;
+  border: 1px solid #d1d5db;
+  border-radius: 2px;
+  background: #f9fafb;
+  color: #9ca3af;
+  font-size: 12px;
+  line-height: 1;
+  cursor: pointer;
+  flex-shrink: 0;
+}
+.cancel-btn:hover {
+  background: #dc2626;
+  border-color: #dc2626;
+  color: #fff;
 }

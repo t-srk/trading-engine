@@ -3,97 +3,99 @@ import type { PriceLevel, ServerMsg } from '../types';
 import type { UseSocketResult } from '../ws/useSocket';
 
 export interface OrderBookState {
-  bids: PriceLevel[];       // sorted descending — best bid first
-  asks: PriceLevel[];       // sorted ascending  — best ask first
-  myBidPrices: Set<number>; // prices where this user has a resting bid
-  myAskPrices: Set<number>; // prices where this user has a resting ask
+  bids: PriceLevel[];                             // sorted descending — authoritative from server
+  asks: PriceLevel[];                             // sorted ascending  — authoritative from server
+  myBidQty: Map<number, number>;                  // price → own resting qty on bid side
+  myAskQty: Map<number, number>;                  // price → own resting qty on ask side
+  cancelLevel: (side: 'BUY' | 'SELL', price: number) => void;
 }
 
-interface TrackedOrder {
+// Tracks own live orders for highlighting — separate from the server book state
+// so a book_update (which carries no ownership info) can't wipe the highlights.
+interface MyOrder {
   side: 'BUY' | 'SELL';
   price: number;
-  remaining: number;
-  isOwn: boolean; // true for orders placed by this session via ack
+  qty: number;  // remaining; decremented on partial fills, deleted when zero
 }
 
 export function useOrderBook(
   socket: UseSocketResult,
   instrument: string,
+  userId: string,
 ): OrderBookState {
-  const [orders, setOrders] = useState<Map<number, TrackedOrder>>(new Map());
+  // Server-authoritative price levels — replaced wholesale on book_update
+  const [bids, setBids] = useState<PriceLevel[]>([]);
+  const [asks, setAsks] = useState<PriceLevel[]>([]);
+
+  // Own orders tracked locally for the "my order" highlight
+  const [myOrders, setMyOrders] = useState<Map<number, MyOrder>>(new Map());
 
   useEffect(() => {
     return socket.subscribe((msg: ServerMsg) => {
+
+      // ── Book_update / snapshot: server is authoritative ──────────────────
+      if (
+        (msg.event === 'book_update' || msg.event === 'snapshot') &&
+        msg.instrument === instrument
+      ) {
+        setBids(msg.bids);
+        setAsks(msg.asks);
+        return;
+      }
+
+      // ── Ack: record own order for highlighting ────────────────────────────
       if (msg.event === 'ack' && msg.instrument === instrument) {
-        setOrders(prev => {
+        setMyOrders(prev => {
           const next = new Map(prev);
-          next.set(msg.order_id, {
-            side: msg.side,
-            price: msg.price,
-            remaining: msg.quantity,
-            isOwn: true,
-          });
+          next.set(msg.order_id, { side: msg.side, price: msg.price, qty: msg.quantity });
           return next;
         });
         return;
       }
 
+      // ── Trade: reduce own order qty; remove if fully filled ───────────────
       if (msg.event === 'trade' && msg.instrument === instrument) {
-        setOrders(prev => {
+        setMyOrders(prev => {
           const next = new Map(prev);
           for (const oid of [msg.buy_order_id, msg.sell_order_id]) {
             const o = next.get(oid);
             if (!o) continue;
-            const rem = o.remaining - msg.quantity;
-            if (rem <= 0) next.delete(oid);
-            else next.set(oid, { ...o, remaining: rem });
+            const remaining = o.qty - msg.quantity;
+            if (remaining <= 0) next.delete(oid);
+            else next.set(oid, { ...o, qty: remaining });
           }
           return next;
         });
         return;
       }
 
+      // ── Cancel ack: remove own order ──────────────────────────────────────
       if (msg.event === 'cancel_ack' && msg.success) {
-        setOrders(prev => {
+        setMyOrders(prev => {
           const next = new Map(prev);
           next.delete(msg.order_id);
           return next;
         });
-        return;
-      }
-
-      // Future server-pushed snapshot — synthetic orders are not "own"
-      if (msg.event === 'snapshot' && msg.instrument === instrument) {
-        const synth = new Map<number, TrackedOrder>();
-        let fakeId = -(1 << 20);
-        for (const l of msg.bids) synth.set(fakeId--, { side: 'BUY',  price: l.price, remaining: l.quantity, isOwn: false });
-        for (const l of msg.asks) synth.set(fakeId--, { side: 'SELL', price: l.price, remaining: l.quantity, isOwn: false });
-        setOrders(synth);
       }
     });
   }, [socket, instrument]);
 
-  const bidMap = new Map<number, number>();
-  const askMap = new Map<number, number>();
-  const myBidPrices = new Set<number>();
-  const myAskPrices = new Set<number>();
+  // Aggregate own order quantities per price level for the "own qty" display
+  const myBidQty = new Map<number, number>();
+  const myAskQty = new Map<number, number>();
+  for (const o of myOrders.values()) {
+    const map = o.side === 'BUY' ? myBidQty : myAskQty;
+    map.set(o.price, (map.get(o.price) ?? 0) + o.qty);
+  }
 
-  for (const o of orders.values()) {
-    const map = o.side === 'BUY' ? bidMap : askMap;
-    map.set(o.price, (map.get(o.price) ?? 0) + o.remaining);
-    if (o.isOwn) {
-      if (o.side === 'BUY') myBidPrices.add(o.price);
-      else                  myAskPrices.add(o.price);
+  // Cancel all own resting orders at a given price level on one side
+  function cancelLevel(side: 'BUY' | 'SELL', price: number) {
+    for (const [orderId, o] of myOrders.entries()) {
+      if (o.side === side && o.price === price) {
+        socket.send({ action: 'cancel', user_id: userId, order_id: orderId });
+      }
     }
   }
 
-  const bids: PriceLevel[] = Array.from(bidMap.entries())
-    .map(([price, quantity]) => ({ price, quantity }))
-    .sort((a, b) => b.price - a.price);
-
-  const asks: PriceLevel[] = Array.from(askMap.entries())
-    .map(([price, quantity]) => ({ price, quantity }))
-    .sort((a, b) => a.price - b.price);
-
-  return { bids, asks, myBidPrices, myAskPrices };
+  return { bids, asks, myBidQty, myAskQty, cancelLevel };
 }

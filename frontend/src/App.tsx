@@ -28,7 +28,7 @@ export function App() {
   const [serverMsg, setServerMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
   const socket = useSocket({ url: WS_URL });
-  const book   = useOrderBook(socket, INSTRUMENT);
+  const book   = useOrderBook(socket, INSTRUMENT, userId);
 
   // Surface acks and errors so the user can see what's happening
   useEffect(() => {

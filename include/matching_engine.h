@@ -47,6 +47,14 @@ public:
         return books_.count(instrument) > 0;
     }
 
+    // All registered instrument names — used to iterate on connect broadcast
+    std::vector<std::string> instruments() const {
+        std::vector<std::string> result;
+        result.reserve(books_.size());
+        for (const auto& kv : books_) result.push_back(kv.first);
+        return result;
+    }
+
     // ── Inspection ────────────────────────────────────────────────────────────
 
     const OrderBook& get_book(const std::string& instrument) const {

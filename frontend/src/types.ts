@@ -54,8 +54,16 @@ export interface CancelAckMsg {
   success: boolean;
 }
 
-// Future: server will push this after the client sends { action: "subscribe", instrument }
-// See TODO in session.cpp for implementation guide.
+// Sent by the server after every submit/cancel and on new client connect.
+// Replaces local book state with the authoritative server view.
+export interface BookUpdateMsg {
+  event: 'book_update';
+  instrument: string;
+  bids: PriceLevel[];
+  asks: PriceLevel[];
+}
+
+// Legacy snapshot shape (same format, kept for forward compatibility)
 export interface SnapshotMsg {
   event: 'snapshot';
   instrument: string;
@@ -63,7 +71,7 @@ export interface SnapshotMsg {
   asks: PriceLevel[];
 }
 
-export type ServerMsg = AckMsg | TradeMsg | ErrorMsg | CancelAckMsg | SnapshotMsg;
+export type ServerMsg = AckMsg | TradeMsg | ErrorMsg | CancelAckMsg | BookUpdateMsg | SnapshotMsg;
 
 // Shared shape used by both SnapshotMsg and the derived order book
 export interface PriceLevel {

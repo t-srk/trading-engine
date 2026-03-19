@@ -46,6 +46,11 @@ public:
 
     bool bids_empty() const { return bids_.empty(); }
     bool asks_empty() const { return asks_.empty(); }
+
+    // Read-only access to the full book — used by Server to serialize book_update
+    const std::map<double, PriceLevel, std::greater<double>>& get_bids() const { return bids_; }
+    const std::map<double, PriceLevel>&                       get_asks() const { return asks_; }
+
     // Cancel a resting order by ID
     // Returns true if found and removed
     bool cancel_order(uint64_t order_id, Side side, double price);
