@@ -6,25 +6,30 @@ set(CMAKE_CXX_STANDARD_REQUIRED ON)
 set(CMAKE_CXX_EXTENSIONS OFF)
 
 if(MSVC)
-    add_compile_options(/W4 /WX- /permissive- /wd4100)
+    add_compile_options(/W4 /WX- /permissive- /wd4100 /wd4702)
 else()
     add_compile_options(-Wall -Wextra -Wpedantic -Wshadow)
 endif()
 
-# ── Shared sources ────────────────────────────────────────────────────────────
-# Both targets need these — define once to avoid repetition
+# ── Boost ─────────────────────────────────────────────────────────────────────
+find_package(Boost REQUIRED)
+
+# ── Shared engine sources ─────────────────────────────────────────────────────
 set(ENGINE_SOURCES
     src/order_book.cpp
     src/matching_engine.cpp
 )
 
-# ── Main executable ───────────────────────────────────────────────────────────
+# ── Main executable (the server) ──────────────────────────────────────────────
 add_executable(trading_engine
     src/main.cpp
+    src/session.cpp
+    src/server.cpp
     ${ENGINE_SOURCES}
 )
 
 target_include_directories(trading_engine PRIVATE include)
+target_link_libraries(trading_engine PRIVATE Boost::boost)
 
 # ── Tests executable ──────────────────────────────────────────────────────────
 add_executable(tests

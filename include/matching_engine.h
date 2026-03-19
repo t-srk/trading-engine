@@ -63,6 +63,9 @@ public:
         if (it == orders_.end()) return nullptr;
         return &it->second;
     }
+    uint64_t last_order_id() const {
+        return next_order_id_ - 1;
+    }
 
 private:
     // One OrderBook per instrument

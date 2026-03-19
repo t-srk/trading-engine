@@ -1,23 +1,19 @@
 #include <iostream>
-#include "order.h"
+#include <boost/asio.hpp>
+#include "server.h"
 
 int main() {
-    // Just a sanity check for now — we'll replace this in the next phase
-    trading::Order o;
-    o.order_id   = 1;
-    o.user_id    = "alice";
-    o.instrument = "BTC-USD";
-    o.price      = 50000.0;
-    o.quantity   = 10;
-    o.filled_qty = 0;
-    o.side       = trading::Side::BUY;
-    o.type       = trading::OrderType::LIMIT;
-    o.status     = trading::OrderStatus::OPEN;
+    try {
+        boost::asio::io_context io_context;
+        trading::Server server(io_context, 9000);
 
-    std::cout << "Order created: ID=" << o.order_id
-              << " User=" << o.user_id
-              << " Remaining=" << o.remaining_qty()
-              << std::endl;
+        std::cout << "[main] server running. Press Ctrl+C to stop.\n";
+        io_context.run();   // blocks here, running the event loop
+
+    } catch (const std::exception& e) {
+        std::cerr << "[main] fatal error: " << e.what() << "\n";
+        return 1;
+    }
 
     return 0;
 }
