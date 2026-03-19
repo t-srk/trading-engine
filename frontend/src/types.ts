@@ -17,7 +17,7 @@ export interface SubmitOrderMsg {
 
 export interface CancelOrderMsg {
   action: 'cancel';
-  token: string;
+  token?: string;
   user_id: string;
   order_id: number;
 }

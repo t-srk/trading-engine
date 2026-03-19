@@ -1,6 +1,10 @@
 import { useEffect, useState } from 'react';
-import type { PriceLevel, ServerMsg } from '../types';
-import type { UseSocketResult } from '../ws/useSocket';
+import type { PriceLevel, ServerMsg, ClientMsg } from '../types';
+
+interface SocketLike {
+  send: (msg: ClientMsg) => void;
+  subscribe: (handler: (msg: ServerMsg) => void) => () => void;
+}
 
 export interface OrderBookState {
   bids: PriceLevel[];                             // sorted descending — authoritative from server
@@ -20,7 +24,7 @@ interface MyOrder {
 }
 
 export function useOrderBook(
-  socket: UseSocketResult,
+  socket: SocketLike,
   instrument: string,
   userId: string,
 ): OrderBookState {
