@@ -76,6 +76,21 @@ public:
         return next_order_id_ - 1;
     }
 
+    // Admin operations ────────────────────────────────────────────────────────
+
+    // Cancel every resting order across all instruments.
+    // Returns the set of affected instrument names so the caller can
+    // broadcast book updates after releasing the mutex.
+    std::vector<std::string> cancel_all_orders();
+
+    // Reset all per-user portfolios to zero.
+    void clear_all_portfolios() { portfolios_.clear(); }
+
+    // Full portfolio map — used by server to serialize the admin view.
+    const std::unordered_map<std::string, Portfolio>& all_portfolios() const {
+        return portfolios_;
+    }
+
     // Returns the portfolio for user_id; returns an empty portfolio if the user
     // has never traded (should not happen in normal flow).
     const Portfolio& get_portfolio(const std::string& user_id) const {

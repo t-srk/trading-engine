@@ -125,6 +125,65 @@ void Server::broadcast_book_update(const std::string& instrument) {
     for (auto& s : live) s->deliver(serialized);
 }
 
+void Server::set_halted(bool h) {
+    std::string serialized;
+    std::vector<std::shared_ptr<Session>> live;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        halted_ = h;
+        serialized = json{{"event","engine_status"},{"halted",halted_}}.dump() + "\n";
+        sessions_.erase(
+            std::remove_if(sessions_.begin(), sessions_.end(),
+                [](const std::shared_ptr<Session>& s){ return !s->socket_alive(); }),
+            sessions_.end());
+        live = sessions_;
+    }
+    for (auto& s : live) s->deliver(serialized);
+}
+
+void Server::send_all_portfolios(const std::string& admin_user_id) {
+    std::string serialized;
+    std::shared_ptr<Session> session;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        json users_arr = json::array();
+        for (const auto& [uid, portfolio] : engine_.all_portfolios()) {
+            json positions_arr = json::array();
+            for (const auto& [instr, pos] : portfolio.positions()) {
+                positions_arr.push_back({
+                    {"instrument",    pos.instrument},
+                    {"qty",           pos.qty},
+                    {"avg_cost",      pos.avg_cost},
+                    {"realized_pnl",  pos.realized_pnl},
+                    {"unrealized_pnl",pos.unrealized_pnl()},
+                    {"last_price",    pos.last_price}
+                });
+            }
+            users_arr.push_back({{"user_id", uid}, {"positions", positions_arr}});
+        }
+
+        serialized = json{{"event","all_portfolios"},{"users",users_arr}}.dump() + "\n";
+
+        auto it = active_users_.find(admin_user_id);
+        if (it != active_users_.end()) session = it->second.lock();
+    }
+    if (session) session->deliver(serialized);
+}
+
+void Server::broadcast_cleared_portfolios() {
+    std::string serialized =
+        json{{"event","portfolio_update"},{"positions",json::array()}}.dump() + "\n";
+    std::vector<std::shared_ptr<Session>> live;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+        for (const auto& [uid, weak] : active_users_) {
+            if (auto s = weak.lock()) live.push_back(s);
+        }
+    }
+    for (auto& s : live) s->deliver(serialized);
+}
+
 void Server::send_portfolio_update(const std::string& user_id) {
     std::string serialized;
     std::shared_ptr<Session> session;

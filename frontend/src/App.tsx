@@ -3,12 +3,13 @@ import { useSocket } from './ws/useSocket';
 import { useAuth } from './hooks/useAuth';
 import { useOrderBook } from './hooks/useOrderBook';
 import { usePortfolio } from './hooks/usePortfolio';
+import { useAdmin } from './hooks/useAdmin';
 import { OrderBook } from './components/OrderBook';
 import { Portfolio } from './components/Portfolio';
+import { AdminPanel } from './components/AdminPanel';
 
 const WS_URL     = 'ws://localhost:9000';
 const INSTRUMENT = 'product_1.0';
-const ORDER_QTY  = 1;
 
 const TICK   = 0.50;
 const MID    = 100;
@@ -26,28 +27,42 @@ const STATUS_COLOR: Record<string, string> = {
 };
 
 export function App() {
-  const [draftUser, setDraftUser] = useState('');   // what's typed in the box
-  const [lockedUser, setLockedUser] = useState(''); // confirmed identity after login_ack
+  const [draftUser, setDraftUser] = useState('');
+  const [lockedUser, setLockedUser] = useState('');
+  const [orderQty, setOrderQty] = useState(1);
+  const [engineHalted, setEngineHalted] = useState(false);
 
   const [serverMsg, setServerMsg] = useState<{ text: string; ok: boolean } | null>(null);
 
-  const rawSocket  = useSocket({ url: WS_URL });
-  const auth       = useAuth(rawSocket);
-  const book       = useOrderBook(auth, INSTRUMENT, lockedUser);
-  const positions  = usePortfolio(auth);
+  const rawSocket = useSocket({ url: WS_URL });
+  const auth      = useAuth(rawSocket);
+  const book      = useOrderBook(auth, INSTRUMENT, lockedUser);
+  const positions = usePortfolio(auth);
+  const admin     = useAdmin(auth, auth.send);
+
+  const isAdmin = lockedUser === 'admin';
 
   // Lock the username once login is acknowledged
   useEffect(() => {
     if (auth.loggedIn) setLockedUser(draftUser);
   }, [auth.loggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Unlock and clear on session_replaced so the user can choose again
+  // Auto-load portfolios when admin logs in
   useEffect(() => {
-    if (auth.replaced) {
-      setLockedUser('');
-      // keep draftUser so the box still shows their name — easy to re-submit
-    }
+    if (auth.loggedIn && isAdmin) admin.refreshPortfolios();
+  }, [auth.loggedIn]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Unlock and clear on session_replaced
+  useEffect(() => {
+    if (auth.replaced) setLockedUser('');
   }, [auth.replaced]);
+
+  // Track engine halted state (all users receive engine_status)
+  useEffect(() => {
+    return auth.subscribe(msg => {
+      if (msg.event === 'engine_status') setEngineHalted(msg.halted);
+    });
+  }, [auth.subscribe]);
 
   // Toast notifications
   useEffect(() => {
@@ -58,8 +73,10 @@ export function App() {
         setServerMsg({ text: `error: ${msg.reason}`, ok: false });
       } else if (msg.event === 'cancel_ack') {
         setServerMsg({ text: `cancel ${msg.success ? 'ok' : 'failed'} #${msg.order_id}`, ok: msg.success });
+      } else if (msg.event === 'admin_ack') {
+        setServerMsg({ text: `admin: ${msg.command} ${msg.success ? 'ok' : 'failed'}`, ok: msg.success });
       }
-      timer = setTimeout(() => setServerMsg(null), 4000);
+      timer = setTimeout(() => setServerMsg(null), 3000);
     });
   }, [auth.subscribe]);
 
@@ -69,12 +86,12 @@ export function App() {
   }
 
   const handleClickBid = useCallback((price: number) => {
-    auth.send({ action: 'submit', token: '', user_id: lockedUser, instrument: INSTRUMENT, side: 'BUY',  price, quantity: ORDER_QTY });
-  }, [auth, lockedUser]);
+    auth.send({ action: 'submit', token: '', user_id: lockedUser, instrument: INSTRUMENT, side: 'BUY',  price, quantity: orderQty });
+  }, [auth, lockedUser, orderQty]);
 
   const handleClickAsk = useCallback((price: number) => {
-    auth.send({ action: 'submit', token: '', user_id: lockedUser, instrument: INSTRUMENT, side: 'SELL', price, quantity: ORDER_QTY });
-  }, [auth, lockedUser]);
+    auth.send({ action: 'submit', token: '', user_id: lockedUser, instrument: INSTRUMENT, side: 'SELL', price, quantity: orderQty });
+  }, [auth, lockedUser, orderQty]);
 
   return (
     <div className="app">
@@ -95,12 +112,12 @@ export function App() {
             />
           </label>
           {!auth.loggedIn && (
-            <button type="submit" className="login-btn" disabled={!draftUser.trim()}>
-              ↵
-            </button>
+            <button type="submit" className="login-btn" disabled={!draftUser.trim()}>↵</button>
           )}
           {auth.loggedIn && <span className="login-badge">●</span>}
         </form>
+
+        {engineHalted && <span className="halted-badge">■ HALTED</span>}
 
         <span
           className="conn-dot"
@@ -118,12 +135,27 @@ export function App() {
       )}
 
       <main className="workspace">
+        {/* ── Order Book ── */}
         <div className="panel">
           <div className="panel-header">
             Order Book
-            <button className="cancel-all-btn" onClick={() => book.cancelAll()}>
-              cancel all
-            </button>
+            <div className="panel-header-right">
+              {isAdmin && (
+                <label className="admin-qty-label">
+                  qty
+                  <input
+                    type="number"
+                    min={1}
+                    value={orderQty}
+                    onChange={e => setOrderQty(Math.max(1, parseInt(e.target.value) || 1))}
+                    className="admin-qty-input"
+                  />
+                </label>
+              )}
+              <button className="cancel-all-btn" onClick={() => book.cancelAll()}>
+                cancel all
+              </button>
+            </div>
           </div>
           <div className={`panel-body${!auth.loggedIn ? ' panel-disabled' : ''}`}>
             {!auth.loggedIn && !auth.replaced && (
@@ -137,12 +169,22 @@ export function App() {
             />
           </div>
         </div>
+
+        {/* ── Portfolio ── */}
         <div className="panel">
           <div className="panel-header">Portfolio</div>
           <div className={`panel-body${!auth.loggedIn ? ' panel-disabled' : ''}`}>
             <Portfolio positions={positions} />
           </div>
         </div>
+
+        {/* ── Admin Panel (admin only) ── */}
+        {isAdmin && (
+          <div className="panel admin-panel">
+            <div className="panel-header">Admin</div>
+            <AdminPanel admin={admin} />
+          </div>
+        )}
       </main>
 
       {serverMsg && (

@@ -55,6 +55,7 @@ private:
     void handle_login(const std::string& json);
     void handle_submit(const std::string& json);
     void handle_cancel(const std::string& json);
+    void handle_admin(const std::string& json);   // admin-only commands
 
     // strand_ MUST be declared before ws_ — C++ initializes members in declaration
     // order, and strand_ must be constructed from the socket's executor before the

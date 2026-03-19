@@ -22,7 +22,13 @@ export interface CancelOrderMsg {
   order_id: number;
 }
 
-export type ClientMsg = LoginMsg | SubmitOrderMsg | CancelOrderMsg;
+export interface AdminMsg {
+  action:  'admin';
+  token:   string;
+  command: 'halt' | 'resume' | 'clear_orders' | 'clear_positions' | 'get_portfolios';
+}
+
+export type ClientMsg = LoginMsg | SubmitOrderMsg | CancelOrderMsg | AdminMsg;
 
 // ── Server → Client ──────────────────────────────────────────────────────────
 // Mirrors AckMsg / TradeMsg / ErrorMsg / CancelAckMsg in include/message.h
@@ -97,7 +103,31 @@ export interface PortfolioUpdateMsg {
   positions: PortfolioPosition[];
 }
 
-export type ServerMsg = LoginAckMsg | AckMsg | TradeMsg | ErrorMsg | CancelAckMsg | BookUpdateMsg | SnapshotMsg | PortfolioUpdateMsg;
+export interface EngineStatusMsg {
+  event:  'engine_status';
+  halted: boolean;
+}
+
+export interface AdminAckMsg {
+  event:   'admin_ack';
+  command: string;
+  success: boolean;
+}
+
+export interface UserPortfolio {
+  user_id:   string;
+  positions: PortfolioPosition[];
+}
+
+export interface AllPortfoliosMsg {
+  event: 'all_portfolios';
+  users: UserPortfolio[];
+}
+
+export type ServerMsg =
+  | LoginAckMsg | AckMsg | TradeMsg | ErrorMsg | CancelAckMsg
+  | BookUpdateMsg | SnapshotMsg | PortfolioUpdateMsg
+  | EngineStatusMsg | AdminAckMsg | AllPortfoliosMsg;
 
 // Shared shape used by both SnapshotMsg and the derived order book
 export interface PriceLevel {

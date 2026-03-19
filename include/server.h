@@ -31,6 +31,21 @@ public:
     // Looks up the user's active session and delivers the serialized portfolio.
     void send_portfolio_update(const std::string& user_id);
 
+    // ── Admin operations ──────────────────────────────────────────────────────
+
+    // Flip the engine halt flag and broadcast engine_status to all sessions.
+    void set_halted(bool h);
+
+    // Read the halt flag — must be called while holding mutex().
+    bool is_halted() const { return halted_; }
+
+    // Send all users' portfolios to the requesting admin session only.
+    void send_all_portfolios(const std::string& admin_user_id);
+
+    // After clear_all_portfolios(), push an empty portfolio_update to every
+    // active session so their UI resets immediately.
+    void broadcast_cleared_portfolios();
+
     // Shared mutex protecting engine_, sessions_, and active_users_.
     // Sessions lock this before touching the matching engine.
     std::mutex& mutex() { return mutex_; }
@@ -47,6 +62,7 @@ private:
     std::unordered_map<std::string, std::weak_ptr<Session>> active_users_;
 
     mutable std::mutex mutex_;
+    bool               halted_ = false;
 };
 
 } // namespace trading

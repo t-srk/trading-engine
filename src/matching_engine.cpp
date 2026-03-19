@@ -1,4 +1,5 @@
 #include "matching_engine.h"
+#include <unordered_set>
 
 namespace trading {
 
@@ -69,6 +70,18 @@ std::vector<Trade> MatchingEngine::submit_order(
     }
 
     return trades;
+}
+
+// ── cancel_all_orders ─────────────────────────────────────────────────────────
+std::vector<std::string> MatchingEngine::cancel_all_orders() {
+    std::unordered_set<std::string> affected;
+    for (auto& [order_id, order] : orders_) {
+        if (order.is_complete()) continue;
+        order.status = OrderStatus::CANCELLED;
+        books_.at(order.instrument).cancel_order(order_id, order.side, order.price);
+        affected.insert(order.instrument);
+    }
+    return std::vector<std::string>(affected.begin(), affected.end());
 }
 
 // ── cancel_order ──────────────────────────────────────────────────────────────

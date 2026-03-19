@@ -109,6 +109,7 @@ void Session::handle_message(const std::string& msg) {
 
         if      (action == "submit") handle_submit(msg);
         else if (action == "cancel") handle_cancel(msg);
+        else if (action == "admin")  handle_admin(msg);
         else {
             deliver(json{{"event","error"},{"reason","unknown action"}}.dump() + "\n");
         }
@@ -168,6 +169,10 @@ void Session::handle_submit(const std::string& msg) {
         uint64_t order_id;
         {
             std::lock_guard<std::mutex> lock(server_.mutex());
+            if (server_.is_halted()) {
+                deliver(json{{"event","error"},{"reason","engine halted — trading suspended"}}.dump() + "\n");
+                return;
+            }
             trades   = engine_.submit_order(user_id, instrument, side, price, quantity);
             order_id = engine_.last_order_id();
         }
@@ -236,6 +241,50 @@ void Session::deliver(const std::string& message) {
             do_write();
         }
     });
+}
+
+// ── handle_admin ──────────────────────────────────────────────────────────────
+void Session::handle_admin(const std::string& msg) {
+    if (user_id_ != "admin") {
+        deliver(json{{"event","error"},{"reason","forbidden"}}.dump() + "\n");
+        return;
+    }
+
+    auto j       = json::parse(msg);
+    auto command = j.at("command").get<std::string>();
+
+    if (command == "halt") {
+        server_.set_halted(true);
+        deliver(json{{"event","admin_ack"},{"command","halt"},{"success",true}}.dump() + "\n");
+
+    } else if (command == "resume") {
+        server_.set_halted(false);
+        deliver(json{{"event","admin_ack"},{"command","resume"},{"success",true}}.dump() + "\n");
+
+    } else if (command == "clear_orders") {
+        std::vector<std::string> affected;
+        {
+            std::lock_guard<std::mutex> lock(server_.mutex());
+            affected = engine_.cancel_all_orders();
+        }
+        for (const auto& instr : affected)
+            server_.broadcast_book_update(instr);
+        deliver(json{{"event","admin_ack"},{"command","clear_orders"},{"success",true}}.dump() + "\n");
+
+    } else if (command == "clear_positions") {
+        {
+            std::lock_guard<std::mutex> lock(server_.mutex());
+            engine_.clear_all_portfolios();
+        }
+        server_.broadcast_cleared_portfolios();
+        deliver(json{{"event","admin_ack"},{"command","clear_positions"},{"success",true}}.dump() + "\n");
+
+    } else if (command == "get_portfolios") {
+        server_.send_all_portfolios(user_id_);
+
+    } else {
+        deliver(json{{"event","error"},{"reason","unknown admin command"}}.dump() + "\n");
+    }
 }
 
 // ── do_write ──────────────────────────────────────────────────────────────────
