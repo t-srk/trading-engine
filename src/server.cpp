@@ -89,15 +89,21 @@ void Server::send_book_snapshot(std::shared_ptr<Session> session) {
             json bids_arr = json::array();
             int count = 0;
             for (const auto& kv : book.get_bids()) {
-                if (count++ >= 20) break;
-                bids_arr.push_back({{"price", kv.first}, {"quantity", kv.second.total_quantity()}});
+                if (count >= 20) break;
+                uint32_t qty = kv.second.total_quantity();
+                if (qty == 0) continue;
+                bids_arr.push_back({{"price", kv.first}, {"quantity", qty}});
+                ++count;
             }
 
             json asks_arr = json::array();
             count = 0;
             for (const auto& kv : book.get_asks()) {
-                if (count++ >= 20) break;
-                asks_arr.push_back({{"price", kv.first}, {"quantity", kv.second.total_quantity()}});
+                if (count >= 20) break;
+                uint32_t qty = kv.second.total_quantity();
+                if (qty == 0) continue;
+                asks_arr.push_back({{"price", kv.first}, {"quantity", qty}});
+                ++count;
             }
 
             msgs.push_back(json{
@@ -121,20 +127,26 @@ void Server::broadcast_book_update(const std::string& instrument) {
 
         const auto& book = engine_.get_book(instrument);
 
-        // Bids: sorted highest → lowest, take top 20
+        // Bids: sorted highest → lowest, take top 20 non-empty levels
         json bids_arr = json::array();
         int count = 0;
         for (const auto& kv : book.get_bids()) {
-            if (count++ >= 20) break;
-            bids_arr.push_back({{"price", kv.first}, {"quantity", kv.second.total_quantity()}});
+            if (count >= 20) break;
+            uint32_t qty = kv.second.total_quantity();
+            if (qty == 0) continue;
+            bids_arr.push_back({{"price", kv.first}, {"quantity", qty}});
+            ++count;
         }
 
-        // Asks: sorted lowest → highest, take top 20
+        // Asks: sorted lowest → highest, take top 20 non-empty levels
         json asks_arr = json::array();
         count = 0;
         for (const auto& kv : book.get_asks()) {
-            if (count++ >= 20) break;
-            asks_arr.push_back({{"price", kv.first}, {"quantity", kv.second.total_quantity()}});
+            if (count >= 20) break;
+            uint32_t qty = kv.second.total_quantity();
+            if (qty == 0) continue;
+            asks_arr.push_back({{"price", kv.first}, {"quantity", qty}});
+            ++count;
         }
 
         json msg = {
