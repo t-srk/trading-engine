@@ -9,7 +9,7 @@ import type { OrderBookHandle } from './components/OrderBook';
 import { Portfolio } from './components/Portfolio';
 import { AdminPanel } from './components/AdminPanel';
 
-const WS_URL     = 'ws://localhost:9000';
+const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:9000';
 const INSTRUMENT = 'product_1.0';
 
 // Full integer ladder 200 → 0 (high to low, as displayed in the book)
