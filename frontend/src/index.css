@@ -598,3 +598,76 @@ html, body, #root {
   color: var(--dim);
   letter-spacing: 0.03em;
 }
+
+/* ── Right column (Portfolio + Trades stacked) ────────────────────────────── */
+.right-col {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+/* ── Trade history table ──────────────────────────────────────────────────── */
+.tr-table {
+  border-collapse: collapse;
+  width: 100%;
+  min-width: 520px;
+}
+
+.tr-col-time  { width: 70px; }
+.tr-col-instr { width: 110px; }
+.tr-col-side  { width: 60px; }
+.tr-col-party { width: 100px; }
+.tr-col-num   { width: 72px; }
+
+.tr-th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 6px 12px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+  background: var(--bg-topbar);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+.tr-th-r { text-align: right; }
+
+.tr-td {
+  padding: 4px 12px;
+  height: 26px;
+  font-size: 12px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border);
+}
+.tr-td-r { text-align: right; }
+
+.tr-time  { color: var(--dim); font-size: 11px; }
+.tr-instr { font-weight: 500; letter-spacing: 0.03em; }
+.tr-party { color: #6b7280; }
+
+.tr-side-badge {
+  display: inline-block;
+  padding: 1px 6px;
+  border-radius: 2px;
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.06em;
+}
+.tr-side-buy  { background: #fca5a5; color: #7f1d1d; }
+.tr-side-sell { background: #6ee7b7; color: #064e3b; }
+
+.tr-edge { font-weight: 500; }
+.tr-pos  { color: #166534; }
+.tr-neg  { color: #991b1b; }
+
+.tr-empty {
+  padding: 20px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--dim);
+  letter-spacing: 0.03em;
+}

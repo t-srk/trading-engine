@@ -4,9 +4,11 @@ import { useAuth } from './hooks/useAuth';
 import { useOrderBook } from './hooks/useOrderBook';
 import { usePortfolio } from './hooks/usePortfolio';
 import { useAdmin } from './hooks/useAdmin';
+import { useTrades } from './hooks/useTrades';
 import { OrderBook } from './components/OrderBook';
 import type { OrderBookHandle } from './components/OrderBook';
 import { Portfolio } from './components/Portfolio';
+import { TradeHistory } from './components/TradeHistory';
 import { AdminPanel } from './components/AdminPanel';
 
 const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:9000';
@@ -35,6 +37,7 @@ export function App() {
   const book         = useOrderBook(auth, INSTRUMENT, lockedUser);
   const positions    = usePortfolio(auth);
   const admin        = useAdmin(auth, auth.send);
+  const midRef       = useRef(100);
   const orderBookRef = useRef<OrderBookHandle>(null);
 
   const midPrice = useMemo(() => {
@@ -44,6 +47,9 @@ export function App() {
     if (book.asks.length > 0) return Math.round(book.asks[0].price);
     return 100;
   }, [book.bids, book.asks]);
+  midRef.current = midPrice;
+
+  const trades = useTrades(auth, () => midRef.current);
 
   const isAdmin = lockedUser === 'purplepoet';
 
@@ -180,11 +186,19 @@ export function App() {
           </div>
         </div>
 
-        {/* ── Portfolio ── */}
-        <div className="panel">
-          <div className="panel-header">Portfolio</div>
-          <div className={`panel-body${!auth.loggedIn ? ' panel-disabled' : ''}`}>
-            <Portfolio positions={positions} />
+        {/* ── Portfolio + Trades column ── */}
+        <div className="right-col">
+          <div className="panel">
+            <div className="panel-header">Portfolio</div>
+            <div className={`panel-body${!auth.loggedIn ? ' panel-disabled' : ''}`}>
+              <Portfolio positions={positions} />
+            </div>
+          </div>
+          <div className="panel">
+            <div className="panel-header">{isAdmin ? 'All Trades' : 'My Trades'}</div>
+            <div className={`panel-body${!auth.loggedIn ? ' panel-disabled' : ''}`}>
+              <TradeHistory trades={trades} userId={lockedUser} isAdmin={isAdmin} />
+            </div>
           </div>
         </div>
 

@@ -35,7 +35,7 @@ https://trading-engine-kdze.vercel.app/
 ```
 
 ## Admin login
-Username: `purplepoet`
+Username: `purple****`
 
 ---
 
