@@ -758,13 +758,36 @@ html, body, #root {
   position: fixed;
   inset: 0;
   z-index: 999;
-  background: rgba(220, 38, 38, 0.55);
+  background: rgba(185, 28, 28, 0.35);
   pointer-events: none;
+  display: flex;
+  align-items: center;
+  justify-content: center;
   animation: tomatoFade 1.5s ease forwards;
 }
 
 @keyframes tomatoFade {
   0%   { opacity: 1; }
-  60%  { opacity: 0.7; }
+  60%  { opacity: 0.75; }
   100% { opacity: 0; }
+}
+
+/* Center splat shape — stays 0.5s then disappears */
+.tomato-splat {
+  width: 520px;
+  height: 520px;
+  flex-shrink: 0;
+  animation: splatPop 0.5s ease forwards;
+}
+
+.tomato-splat path {
+  fill: #b91c1c;
+}
+
+@keyframes splatPop {
+  0%   { transform: scale(0.25); opacity: 1; }
+  18%  { transform: scale(1.12); opacity: 1; }
+  32%  { transform: scale(0.97); opacity: 1; }
+  55%  { transform: scale(1);    opacity: 1; }
+  100% { transform: scale(1);    opacity: 0; }
 }

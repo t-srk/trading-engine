@@ -16,6 +16,22 @@ import type { LeaderboardEntry } from './types';
 const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:9000';
 const INSTRUMENT = 'product_1.0';
 
+// Generate a random tomato-splat polygon path (centered at 0,0, fits in ~±210px).
+function makeSplatPath(): string {
+  const arms      = 7 + Math.floor(Math.random() * 3);   // 7 – 9 arms
+  const total     = arms * 2;
+  const rotOffset = Math.random() * Math.PI * 2;
+  const pts: string[] = [];
+  for (let i = 0; i < total; i++) {
+    const angle = (i / total) * Math.PI * 2 + rotOffset + (Math.random() - 0.5) * 0.3;
+    const r = i % 2 === 0
+      ? 115 + Math.random() * 90   // arm tip  : 115 – 205
+      :  40 + Math.random() * 50;  // valley   :  40 –  90
+    pts.push(`${(Math.cos(angle) * r).toFixed(1)},${(Math.sin(angle) * r).toFixed(1)}`);
+  }
+  return `M ${pts.join(' L ')} Z`;
+}
+
 // Full integer ladder 200 → 0 (high to low, as displayed in the book)
 const PRICE_LADDER: number[] = Array.from({ length: 201 }, (_, i) => 200 - i);
 
@@ -35,6 +51,7 @@ export function App() {
   const [serverMsg, setServerMsg] = useState<{ text: string; ok: boolean } | null>(null);
   const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
   const [tomatoSplash, setTomatoSplash] = useState(false);
+  const [splatPath,    setSplatPath]    = useState('');
 
   const rawSocket    = useSocket({ url: WS_URL });
   const auth         = useAuth(rawSocket);
@@ -84,6 +101,7 @@ export function App() {
     return auth.subscribe(msg => {
       if (msg.event === 'leaderboard_update') setLeaderboard(msg.users);
       if (msg.event === 'tomato_hit') {
+        setSplatPath(makeSplatPath());
         setTomatoSplash(true);
         setTimeout(() => setTomatoSplash(false), 1500);
       }
@@ -246,7 +264,13 @@ export function App() {
       </main>
 
       {/* ── Tomato splash overlay ── */}
-      {tomatoSplash && <div className="tomato-splash" />}
+      {tomatoSplash && (
+        <div className="tomato-splash">
+          <svg className="tomato-splat" viewBox="-220 -220 440 440" xmlns="http://www.w3.org/2000/svg">
+            <path d={splatPath} />
+          </svg>
+        </div>
+      )}
 
       {serverMsg && (
         <div className={`toast ${serverMsg.ok ? 'toast-ok' : 'toast-err'}`}>
