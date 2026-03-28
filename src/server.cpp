@@ -64,6 +64,7 @@ void Server::register_session(const std::string& user_id,
         old_session->deliver(json{{"event","error"},{"reason","session_replaced"}}.dump() + "\n");
         old_session->force_close();
     }
+    broadcast_leaderboard();
 }
 
 void Server::deregister_session(const std::string& user_id, Session* raw) {
@@ -217,6 +218,66 @@ void Server::send_all_portfolios(const std::string& admin_user_id) {
     if (session) session->deliver(serialized);
 }
 
+void Server::broadcast_leaderboard() {
+    std::string serialized;
+    std::vector<std::shared_ptr<Session>> live;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        json users_arr = json::array();
+        for (const auto& [uid, portfolio] : engine_.all_portfolios()) {
+            double total_pnl = 0.0;
+            for (const auto& [instr, pos] : portfolio.positions()) {
+                double mark = engine_.last_traded_price(pos.instrument);
+                double upnl = pos.qty * (mark - pos.avg_cost);
+                total_pnl += upnl + pos.realized_pnl;
+            }
+            users_arr.push_back({{"user_id", uid}, {"total_pnl", total_pnl}});
+        }
+
+        serialized = json{{"event","leaderboard_update"},{"users",users_arr}}.dump() + "\n";
+
+        sessions_.erase(
+            std::remove_if(sessions_.begin(), sessions_.end(),
+                [](const std::shared_ptr<Session>& s){ return !s->socket_alive(); }),
+            sessions_.end());
+        live = sessions_;
+    }
+    for (auto& s : live) s->deliver(serialized);
+}
+
+void Server::route_tomato(const std::string& from_id,
+                           const std::string& target_id,
+                           std::shared_ptr<Session> from_session) {
+    std::shared_ptr<Session> target_session;
+    {
+        std::lock_guard<std::mutex> lock(mutex_);
+
+        auto now = std::chrono::steady_clock::now();
+        auto it  = tomato_cooldowns_.find(from_id);
+        if (it != tomato_cooldowns_.end()) {
+            auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(
+                          now - it->second).count();
+            if (ms < 10000) {
+                int secs = static_cast<int>((10000 - ms) / 1000) + 1;
+                from_session->deliver(
+                    json{{"event","error"},
+                         {"reason","tomato on cooldown: " + std::to_string(secs) + "s remaining"}}
+                    .dump() + "\n");
+                return;
+            }
+        }
+        tomato_cooldowns_[from_id] = now;
+
+        auto tit = active_users_.find(target_id);
+        if (tit != active_users_.end()) target_session = tit->second.lock();
+    }
+
+    if (target_session)
+        target_session->deliver(
+            json{{"event","tomato_hit"},{"from_id",from_id}}.dump() + "\n");
+}
+
 void Server::broadcast_orders_cleared() {
     std::string serialized = json{{"event","orders_cleared"}}.dump() + "\n";
     std::vector<std::shared_ptr<Session>> live;
@@ -242,6 +303,7 @@ void Server::broadcast_cleared_portfolios() {
         }
     }
     for (auto& s : live) s->deliver(serialized);
+    broadcast_leaderboard();
 }
 
 void Server::broadcast_portfolio_mark_updates(const std::string& instrument) {
@@ -255,6 +317,7 @@ void Server::broadcast_portfolio_mark_updates(const std::string& instrument) {
     }
     for (const auto& uid : users)
         send_portfolio_update(uid);
+    broadcast_leaderboard();
 }
 
 void Server::send_portfolio_update(const std::string& user_id) {

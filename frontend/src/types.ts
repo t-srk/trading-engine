@@ -30,7 +30,14 @@ export interface AdminMsg {
   price?:      number;
 }
 
-export type ClientMsg = LoginMsg | SubmitOrderMsg | CancelOrderMsg | AdminMsg;
+export interface ThrowTomatoMsg {
+  action:    'throw_tomato';
+  token:     string;
+  user_id:   string;
+  target_id: string;
+}
+
+export type ClientMsg = LoginMsg | SubmitOrderMsg | CancelOrderMsg | AdminMsg | ThrowTomatoMsg;
 
 // ── Server → Client ──────────────────────────────────────────────────────────
 // Mirrors AckMsg / TradeMsg / ErrorMsg / CancelAckMsg in include/message.h
@@ -130,10 +137,26 @@ export interface OrdersClearedMsg {
   event: 'orders_cleared';
 }
 
+export interface LeaderboardEntry {
+  user_id:   string;
+  total_pnl: number;
+}
+
+export interface LeaderboardUpdateMsg {
+  event: 'leaderboard_update';
+  users: LeaderboardEntry[];
+}
+
+export interface TomatoHitMsg {
+  event:   'tomato_hit';
+  from_id: string;
+}
+
 export type ServerMsg =
   | LoginAckMsg | AckMsg | TradeMsg | ErrorMsg | CancelAckMsg
   | BookUpdateMsg | SnapshotMsg | PortfolioUpdateMsg
-  | EngineStatusMsg | AdminAckMsg | AllPortfoliosMsg | OrdersClearedMsg;
+  | EngineStatusMsg | AdminAckMsg | AllPortfoliosMsg | OrdersClearedMsg
+  | LeaderboardUpdateMsg | TomatoHitMsg;
 
 // Shared shape used by both SnapshotMsg and the derived order book
 export interface PriceLevel {

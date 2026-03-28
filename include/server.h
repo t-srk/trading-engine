@@ -6,6 +6,7 @@
 #include <mutex>
 #include <unordered_map>
 #include <string>
+#include <chrono>
 #include "matching_engine.h"
 #include "session.h"
 
@@ -59,6 +60,15 @@ public:
     // After admin clear_orders, tell every client to wipe their resting order highlights.
     void broadcast_orders_cleared();
 
+    // Broadcast leaderboard (name + total PnL) to all connected sessions.
+    void broadcast_leaderboard();
+
+    // Route a tomato throw from from_id to target_id.
+    // Enforces a 10-second per-thrower cooldown; delivers tomato_hit to the target.
+    void route_tomato(const std::string& from_id,
+                      const std::string& target_id,
+                      std::shared_ptr<Session> from_session);
+
     // Shared mutex protecting engine_, sessions_, and active_users_.
     // Sessions lock this before touching the matching engine.
     std::mutex& mutex() { return mutex_; }
@@ -73,6 +83,10 @@ private:
 
     // user_id → their current authenticated session (weak to avoid ownership cycles)
     std::unordered_map<std::string, std::weak_ptr<Session>> active_users_;
+
+    // user_id → last time they threw a tomato (for 10s cooldown enforcement)
+    std::unordered_map<std::string,
+        std::chrono::steady_clock::time_point> tomato_cooldowns_;
 
     mutable std::mutex mutex_;
     bool               halted_ = false;

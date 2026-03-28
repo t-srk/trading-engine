@@ -10,6 +10,8 @@ import type { OrderBookHandle } from './components/OrderBook';
 import { Portfolio } from './components/Portfolio';
 import { TradeHistory } from './components/TradeHistory';
 import { AdminPanel } from './components/AdminPanel';
+import { Leaderboard } from './components/Leaderboard';
+import type { LeaderboardEntry } from './types';
 
 const WS_URL = import.meta.env.VITE_WS_URL ?? 'ws://localhost:9000';
 const INSTRUMENT = 'product_1.0';
@@ -31,6 +33,8 @@ export function App() {
   const [engineHalted, setEngineHalted] = useState(false);
 
   const [serverMsg, setServerMsg] = useState<{ text: string; ok: boolean } | null>(null);
+  const [leaderboard, setLeaderboard] = useState<LeaderboardEntry[]>([]);
+  const [tomatoSplash, setTomatoSplash] = useState(false);
 
   const rawSocket    = useSocket({ url: WS_URL });
   const auth         = useAuth(rawSocket);
@@ -74,6 +78,21 @@ export function App() {
       if (msg.event === 'engine_status') setEngineHalted(msg.halted);
     });
   }, [auth.subscribe]);
+
+  // Leaderboard + tomato splash
+  useEffect(() => {
+    return auth.subscribe(msg => {
+      if (msg.event === 'leaderboard_update') setLeaderboard(msg.users);
+      if (msg.event === 'tomato_hit') {
+        setTomatoSplash(true);
+        setTimeout(() => setTomatoSplash(false), 1500);
+      }
+    });
+  }, [auth.subscribe]);
+
+  const handleThrowTomato = useCallback((targetId: string) => {
+    auth.send({ action: 'throw_tomato', token: '', user_id: lockedUser, target_id: targetId });
+  }, [auth, lockedUser]);
 
   // Toast notifications
   useEffect(() => {
@@ -202,6 +221,20 @@ export function App() {
           </div>
         </div>
 
+        {/* ── Leaderboard (all logged-in users) ── */}
+        {auth.loggedIn && (
+          <div className="panel leaderboard-panel">
+            <div className="panel-header">Leaderboard</div>
+            <div className="panel-body lb-body">
+              <Leaderboard
+                entries={leaderboard}
+                currentUser={lockedUser}
+                onThrowTomato={handleThrowTomato}
+              />
+            </div>
+          </div>
+        )}
+
         {/* ── Admin Panel (admin only) ── */}
         {isAdmin && (
           <div className="panel admin-panel">
@@ -210,6 +243,9 @@ export function App() {
           </div>
         )}
       </main>
+
+      {/* ── Tomato splash overlay ── */}
+      {tomatoSplash && <div className="tomato-splash" />}
 
       {serverMsg && (
         <div className={`toast ${serverMsg.ok ? 'toast-ok' : 'toast-err'}`}>

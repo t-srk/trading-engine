@@ -99,9 +99,10 @@ void Session::handle_message(const std::string& msg) {
             return;
         }
 
-        if      (action == "submit") handle_submit(msg);
-        else if (action == "cancel") handle_cancel(msg);
-        else if (action == "admin")  handle_admin(msg);
+        if      (action == "submit")       handle_submit(msg);
+        else if (action == "cancel")       handle_cancel(msg);
+        else if (action == "admin")        handle_admin(msg);
+        else if (action == "throw_tomato") handle_throw_tomato(msg);
         else {
             deliver(json{{"event","error"},{"reason","unknown action"}}.dump() + "\n");
         }
@@ -287,6 +288,13 @@ void Session::handle_admin(const std::string& msg) {
     } else {
         deliver(json{{"event","error"},{"reason","unknown admin command"}}.dump() + "\n");
     }
+}
+
+// ── handle_throw_tomato ───────────────────────────────────────────────────────
+void Session::handle_throw_tomato(const std::string& msg) {
+    auto j         = json::parse(msg);
+    auto target_id = j.at("target_id").get<std::string>();
+    server_.route_tomato(user_id_, target_id, shared_from_this());
 }
 
 // ── do_write ──────────────────────────────────────────────────────────────────

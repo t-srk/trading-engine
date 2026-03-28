@@ -671,3 +671,100 @@ html, body, #root {
   color: var(--dim);
   letter-spacing: 0.03em;
 }
+
+/* ── Leaderboard panel ────────────────────────────────────────────────────── */
+.leaderboard-panel { min-width: 240px; }
+
+.lb-body { overflow-y: auto; max-height: calc(100vh - 44px - 32px - 29px); }
+
+.lb-table {
+  border-collapse: collapse;
+  width: 100%;
+}
+
+.lb-th {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  padding: 6px 12px;
+  font-size: 10px;
+  font-weight: 500;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--dim);
+  background: var(--bg-topbar);
+  border-bottom: 1px solid var(--border);
+  text-align: left;
+  white-space: nowrap;
+}
+.lb-th-r      { text-align: right; }
+.lb-th-rank   { width: 28px; }
+.lb-th-action { width: 72px; }
+
+.lb-td {
+  padding: 4px 12px;
+  height: 28px;
+  font-size: 12px;
+  vertical-align: middle;
+  border-bottom: 1px solid var(--border);
+}
+.lb-td-r { text-align: right; }
+
+.lb-rank { color: var(--dim); font-size: 11px; }
+
+.lb-name { font-weight: 500; }
+.lb-me   { color: #6b7280; font-style: italic; }
+
+.lb-pnl  { font-weight: 600; font-variant-numeric: tabular-nums; }
+
+.lb-row-top { background: #fffbeb; }
+
+.lb-action { text-align: center; }
+
+.lb-empty {
+  padding: 20px;
+  text-align: center;
+  font-size: 12px;
+  color: var(--dim);
+  letter-spacing: 0.03em;
+}
+
+/* ── Tomato throw button ──────────────────────────────────────────────────── */
+.tomato-btn {
+  padding: 2px 7px;
+  border: 1px solid #fca5a5;
+  border-radius: 3px;
+  background: #fff5f5;
+  font-family: var(--font);
+  font-size: 11px;
+  font-weight: 600;
+  cursor: pointer;
+  white-space: nowrap;
+  letter-spacing: 0.03em;
+}
+.tomato-btn:not(:disabled):hover {
+  background: #fca5a5;
+  border-color: #f87171;
+}
+.tomato-btn-cd {
+  opacity: 0.6;
+  cursor: default;
+  border-color: var(--border);
+  background: #f9fafb;
+}
+
+/* ── Tomato splash overlay ────────────────────────────────────────────────── */
+.tomato-splash {
+  position: fixed;
+  inset: 0;
+  z-index: 999;
+  background: rgba(220, 38, 38, 0.55);
+  pointer-events: none;
+  animation: tomatoFade 1.5s ease forwards;
+}
+
+@keyframes tomatoFade {
+  0%   { opacity: 1; }
+  60%  { opacity: 0.7; }
+  100% { opacity: 0; }
+}
