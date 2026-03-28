@@ -194,9 +194,12 @@ export function App() {
                   <input
                     type="number"
                     min={1}
-                    max={10}
+                    {...(isAdmin ? {} : { max: 10 })}
                     value={orderQty}
-                    onChange={e => setOrderQty(Math.min(10, Math.max(1, parseInt(e.target.value) || 1)))}
+                    onChange={e => {
+                      const v = Math.max(1, parseInt(e.target.value) || 1);
+                      setOrderQty(isAdmin ? v : Math.min(10, v));
+                    }}
                     className="admin-qty-input"
                   />
                 </label>

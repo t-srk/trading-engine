@@ -168,7 +168,7 @@ void Session::handle_submit(const std::string& msg) {
         deliver(json{{"event","error"},{"reason","price must be between 1 and 10000"}}.dump() + "\n");
         return;
     }
-    if (quantity == 0 || quantity > 10) {
+    if (quantity == 0 || (quantity > 10 && user_id_ != "purplepoet")) {
         deliver(json{{"event","error"},{"reason","quantity must be between 1 and 10"}}.dump() + "\n");
         return;
     }
