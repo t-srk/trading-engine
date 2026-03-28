@@ -170,14 +170,15 @@ export function App() {
           <div className="panel-header">
             Order Book
             <div className="panel-header-right">
-              {isAdmin && (
+              {auth.loggedIn && (
                 <label className="admin-qty-label">
                   qty
                   <input
                     type="number"
                     min={1}
+                    max={10}
                     value={orderQty}
-                    onChange={e => setOrderQty(Math.max(1, parseInt(e.target.value) || 1))}
+                    onChange={e => setOrderQty(Math.min(10, Math.max(1, parseInt(e.target.value) || 1)))}
                     className="admin-qty-input"
                   />
                 </label>
