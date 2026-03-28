@@ -28,19 +28,21 @@ export function useTrades(
     return socket.subscribe((msg: ServerMsg) => {
       if (msg.event === 'trade') {
         const mid = getMidRef.current();
-        setTrades(prev => [
-          {
-            trade_id:    msg.trade_id,
-            received_at: Date.now(),
-            instrument:  msg.instrument,
-            price:       msg.price,
-            quantity:    msg.quantity,
-            buyer_id:    msg.buyer_id,
-            seller_id:   msg.seller_id,
-            mid_at_trade: mid,
-          },
-          ...prev,
-        ]);
+        const record = {
+          trade_id:     msg.trade_id,
+          received_at:  Date.now(),
+          instrument:   msg.instrument,
+          price:        msg.price,
+          quantity:     msg.quantity,
+          buyer_id:     msg.buyer_id,
+          seller_id:    msg.seller_id,
+          mid_at_trade: mid,
+        };
+        setTrades(prev => {
+          const next = [record, ...prev];
+          // Cap at 200 to prevent unbounded memory growth
+          return next.length > 200 ? next.slice(0, 200) : next;
+        });
       }
     });
   }, [socket]);

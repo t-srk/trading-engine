@@ -1,4 +1,4 @@
-import { forwardRef, useImperativeHandle, useRef } from 'react';
+import { forwardRef, useImperativeHandle, useRef, useMemo, memo } from 'react';
 import type { OrderBookState } from '../hooks/useOrderBook';
 
 export interface OrderBookHandle {
@@ -21,7 +21,7 @@ function buildMaps(book: OrderBookState) {
   return { bids, asks };
 }
 
-export const OrderBook = forwardRef<OrderBookHandle, Props>(
+export const OrderBook = memo(forwardRef<OrderBookHandle, Props>(
   function OrderBook({ priceLadder, book, midPrice, onClickBid, onClickAsk }, ref) {
     const containerRef = useRef<HTMLDivElement>(null);
 
@@ -35,7 +35,8 @@ export const OrderBook = forwardRef<OrderBookHandle, Props>(
       },
     }), [midPrice]);
 
-    const { bids, asks } = buildMaps(book);
+    // Rebuild price maps only when the server-side levels actually change
+    const { bids, asks } = useMemo(() => buildMaps(book), [book.bids, book.asks]);
 
     return (
       <div ref={containerRef}>
@@ -116,4 +117,4 @@ export const OrderBook = forwardRef<OrderBookHandle, Props>(
       </div>
     );
   }
-);
+));

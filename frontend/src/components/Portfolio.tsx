@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { PortfolioPosition } from '../types';
 
 interface Props {
@@ -16,7 +17,7 @@ function signedFmt(n: number): string {
   return (n >= 0 ? '+' : '') + fmt(n);
 }
 
-export function Portfolio({ positions }: Props) {
+export const Portfolio = memo(function Portfolio({ positions }: Props) {
   return (
     <table className="pf-table">
       <colgroup>
@@ -71,4 +72,4 @@ export function Portfolio({ positions }: Props) {
       </tbody>
     </table>
   );
-}
+});

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import type { LeaderboardEntry } from '../types';
 
 interface Props {
@@ -9,7 +9,7 @@ interface Props {
 
 const COOLDOWN_MS = 10_000;
 
-export function Leaderboard({ entries, currentUser, onThrowTomato }: Props) {
+export const Leaderboard = memo(function Leaderboard({ entries, currentUser, onThrowTomato }: Props) {
   const [cooldownUntil, setCooldownUntil] = useState<number | null>(null);
   const [cooldownLeft,  setCooldownLeft]  = useState(0);
 
@@ -43,6 +43,7 @@ export function Leaderboard({ entries, currentUser, onThrowTomato }: Props) {
   }
 
   return (
+
     <table className="lb-table">
       <thead>
         <tr>
@@ -84,4 +85,4 @@ export function Leaderboard({ entries, currentUser, onThrowTomato }: Props) {
       </tbody>
     </table>
   );
-}
+});

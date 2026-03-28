@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useMemo, useCallback } from 'react';
 import type { PriceLevel, ServerMsg, ClientMsg } from '../types';
 
 interface SocketLike {
@@ -90,29 +90,31 @@ export function useOrderBook(
     });
   }, [socket, instrument]);
 
-  // Aggregate own order quantities per price level for the "own qty" display
-  const myBidQty = new Map<number, number>();
-  const myAskQty = new Map<number, number>();
-  for (const o of myOrders.values()) {
-    const map = o.side === 'BUY' ? myBidQty : myAskQty;
-    map.set(o.price, (map.get(o.price) ?? 0) + o.qty);
-  }
+  // Aggregate own order quantities per price level — only recomputed when myOrders changes,
+  // not on every book_update or unrelated message.
+  const { myBidQty, myAskQty } = useMemo(() => {
+    const bidQty = new Map<number, number>();
+    const askQty = new Map<number, number>();
+    for (const o of myOrders.values()) {
+      const map = o.side === 'BUY' ? bidQty : askQty;
+      map.set(o.price, (map.get(o.price) ?? 0) + o.qty);
+    }
+    return { myBidQty: bidQty, myAskQty: askQty };
+  }, [myOrders]);
 
-  // Cancel all own resting orders at a given price level on one side
-  function cancelLevel(side: 'BUY' | 'SELL', price: number) {
+  const cancelLevel = useCallback((side: 'BUY' | 'SELL', price: number) => {
     for (const [orderId, o] of myOrders.entries()) {
       if (o.side === side && o.price === price) {
         socket.send({ action: 'cancel', user_id: userId, order_id: orderId });
       }
     }
-  }
+  }, [myOrders, socket, userId]);
 
-  // Cancel every own resting order across all levels and sides
-  function cancelAll() {
+  const cancelAll = useCallback(() => {
     for (const orderId of myOrders.keys()) {
       socket.send({ action: 'cancel', user_id: userId, order_id: orderId });
     }
-  }
+  }, [myOrders, socket, userId]);
 
   return { bids, asks, myBidQty, myAskQty, cancelLevel, cancelAll };
 }

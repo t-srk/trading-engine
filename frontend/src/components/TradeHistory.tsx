@@ -1,3 +1,4 @@
+import { memo } from 'react';
 import type { TradeRecord } from '../hooks/useTrades';
 
 interface Props {
@@ -19,7 +20,7 @@ function edgeClass(n: number): string {
   return n > 0 ? ' tr-pos' : n < 0 ? ' tr-neg' : '';
 }
 
-export function TradeHistory({ trades, userId, isAdmin }: Props) {
+export const TradeHistory = memo(function TradeHistory({ trades, userId, isAdmin }: Props) {
   const visible = isAdmin
     ? trades
     : trades.filter(t => t.buyer_id === userId || t.seller_id === userId);
@@ -110,4 +111,4 @@ export function TradeHistory({ trades, userId, isAdmin }: Props) {
       </tbody>
     </table>
   );
-}
+});

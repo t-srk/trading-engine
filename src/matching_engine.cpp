@@ -48,6 +48,7 @@ std::vector<Trade> MatchingEngine::submit_order(
     orders_[id].status     = order.status;
 
     // Sync resting orders that got filled, record trades, update portfolios
+    static constexpr std::size_t MAX_TRADE_HISTORY = 500;
     for (const auto& t : trades) {
         trade_history_.push_back(t);
 
@@ -70,6 +71,14 @@ std::vector<Trade> MatchingEngine::submit_order(
         // Update both sides' portfolios
         portfolios_[t.buyer_id].apply_trade(t, t.buyer_id);
         portfolios_[t.seller_id].apply_trade(t, t.seller_id);
+    }
+
+    // Keep only the most recent MAX_TRADE_HISTORY trades to bound memory use
+    if (trade_history_.size() > MAX_TRADE_HISTORY) {
+        trade_history_.erase(
+            trade_history_.begin(),
+            trade_history_.begin() +
+                static_cast<std::ptrdiff_t>(trade_history_.size() - MAX_TRADE_HISTORY));
     }
 
     return trades;

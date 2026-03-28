@@ -1,8 +1,8 @@
 #include "session.h"
 #include "server.h"
 #include <iostream>
-#include <atomic>
-#include <chrono>
+#include <random>
+#include <cctype>
 #include <cstdio>
 #include <nlohmann/json.hpp>
 
@@ -116,15 +116,23 @@ void Session::handle_login(const std::string& msg) {
     auto j       = json::parse(msg);
     auto user_id = j.at("user_id").get<std::string>();
 
-    // Generate a token: 16-hex timestamp + 16-hex monotonic counter
-    static std::atomic<uint64_t> counter{0};
-    uint64_t ts = static_cast<uint64_t>(
-        std::chrono::steady_clock::now().time_since_epoch().count());
-    uint64_t n  = ++counter;
-    char buf[33];
-    std::snprintf(buf, sizeof(buf), "%016llx%016llx",
-                  static_cast<unsigned long long>(ts),
-                  static_cast<unsigned long long>(n));
+    // Validate username: 1-32 chars, alphanumeric / underscore / hyphen only
+    if (user_id.empty() || user_id.size() > 32) {
+        deliver(json{{"event","error"},{"reason","username must be 1-32 characters"}}.dump() + "\n");
+        return;
+    }
+    for (unsigned char c : user_id) {
+        if (!std::isalnum(c) && c != '_' && c != '-') {
+            deliver(json{{"event","error"},{"reason","username may only contain letters, numbers, _ or -"}}.dump() + "\n");
+            return;
+        }
+    }
+
+    // Generate a cryptographically random 32-hex-char session token
+    static std::random_device rd;
+    char buf[33] = {};
+    for (int i = 0; i < 4; i++)
+        std::snprintf(buf + i * 8, 9, "%08x", static_cast<uint32_t>(rd()));
 
     token_         = std::string(buf);
     user_id_       = user_id;
@@ -154,6 +162,20 @@ void Session::handle_submit(const std::string& msg) {
     std::string side_str   = j.at("side").get<std::string>();
     double      price      = j.at("price").get<double>();
     uint32_t    quantity   = j.at("quantity").get<uint32_t>();
+
+    // Server-side validation — enforces limits independently of the frontend
+    if (price <= 0.0 || price > 10000.0) {
+        deliver(json{{"event","error"},{"reason","price must be between 1 and 10000"}}.dump() + "\n");
+        return;
+    }
+    if (quantity == 0 || quantity > 10) {
+        deliver(json{{"event","error"},{"reason","quantity must be between 1 and 10"}}.dump() + "\n");
+        return;
+    }
+    if (!engine_.has_instrument(instrument)) {
+        deliver(json{{"event","error"},{"reason","unknown instrument"}}.dump() + "\n");
+        return;
+    }
 
     Side side = (side_str == "BUY") ? Side::BUY : Side::SELL;
 

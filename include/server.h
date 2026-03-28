@@ -88,8 +88,14 @@ private:
     std::unordered_map<std::string,
         std::chrono::steady_clock::time_point> tomato_cooldowns_;
 
+    // Last time broadcast_leaderboard actually sent (for 250 ms throttle)
+    std::chrono::steady_clock::time_point last_leaderboard_at_{};
+
     mutable std::mutex mutex_;
     bool               halted_ = false;
+
+    // Hard cap on simultaneous WebSocket connections (DoS guard)
+    static constexpr std::size_t MAX_SESSIONS = 100;
 };
 
 } // namespace trading

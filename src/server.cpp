@@ -24,6 +24,18 @@ void Server::do_accept() {
     acceptor_.async_accept(
         [this](beast::error_code ec, tcp::socket socket) {
             if (!ec) {
+                // Reject connection if we're already at the session cap
+                {
+                    std::lock_guard<std::mutex> lock(mutex_);
+                    if (sessions_.size() >= MAX_SESSIONS) {
+                        std::cout << "[server] connection rejected — session cap reached\n";
+                        beast::error_code close_ec;
+                        socket.close(close_ec);
+                        do_accept();
+                        return;
+                    }
+                }
+
                 std::cout << "[server] client connected: "
                           << socket.remote_endpoint() << "\n";
 
@@ -223,6 +235,15 @@ void Server::broadcast_leaderboard() {
     std::vector<std::shared_ptr<Session>> live;
     {
         std::lock_guard<std::mutex> lock(mutex_);
+
+        // Throttle: at most one leaderboard broadcast every 250 ms.
+        // This prevents O(users × instruments) work on every single trade.
+        auto now = std::chrono::steady_clock::now();
+        if (std::chrono::duration_cast<std::chrono::milliseconds>(
+                now - last_leaderboard_at_).count() < 250) {
+            return;
+        }
+        last_leaderboard_at_ = now;
 
         json users_arr = json::array();
         for (const auto& [uid, portfolio] : engine_.all_portfolios()) {
